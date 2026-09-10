@@ -8,10 +8,10 @@ landscape day sheet — so nothing about the audit trail has to change.
 
 ### What it does
 
-**Cash vouchers** carry several lines and total themselves, print at A5
-landscape to match the school's voucher book, and download as a one-page PDF.
-Construction vouchers print with a contractor signature block instead of
-"Passed by", as the paper ones do.
+**Cash vouchers** carry several lines and total themselves and print at A5
+landscape to match the school's voucher book — choose "Save as PDF" in the print
+dialog to keep a copy. Construction vouchers print with a contractor signature
+block instead of "Passed by", as the paper ones do.
 
 **The document lifecycle** follows Frappe's own: a voucher is saved as a
 **Draft**, **Submitted** once it belongs in the books, **Cancelled** if it is
@@ -60,9 +60,6 @@ The same interface also runs as a static page with no server at all, keeping the
 books in `localStorage` — useful where connectivity is unreliable. `app.js` is
 adapter-agnostic: `storage.js` keeps the books in the browser,
 `storage-frappe.js` keeps them on the site. Only the adapter changes.
-
-`voucher-pdf.js` writes the voucher PDF directly, with no library, so the
-download works offline.
 
 ### A note on the sample data
 

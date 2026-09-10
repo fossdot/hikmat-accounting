@@ -204,10 +204,6 @@ function buildStatic(){
   $("#edit-payee").addEventListener("click",function(){ managePerson("payees","#f-payee","payee"); });
   $("#v-submit").addEventListener("click",function(){ if(editingId) submitEntry(editingId); });
   $("#d-print").addEventListener("click",printDay);
-  $("#btn-pdf").addEventListener("click",function(){
-    var cur=editingId?entryById(editingId):null;
-    downloadVoucherPdf(formData(),cur?cur.no:(amendBase?amendNo(amendBase):nextNo()));
-  });
   $("#add-item").addEventListener("click",function(){ addItemRow(); });
   ["f-date","f-payee","f-addr","f-acct","f-by","f-mode","f-appr"].forEach(function(id){
     $("#"+id).addEventListener("input",renderSlip);
@@ -529,39 +525,6 @@ function amendEntry(id){
   say("Amending "+e.no+" as "+amendNo(e.no)+" \u2014 correct it, save the draft, then submit.");
 }
 
-/* Hands over a PDF file of the voucher. Printing can reach a PDF too, but only
-   through the print dialog; this is the one click that produces something to
-   attach to a message. */
-function downloadVoucherPdf(d,no){
-  if(!window.RokarPdf){ alert("The PDF writer did not load \u2014 print the voucher instead."); return; }
-  var isBuild=(d.category==="Construction");
-  var blob=RokarPdf.voucher({
-    org:ORG, place:PLACE,
-    account:d.account||"", costHead:(d.category==="STL"&&d.head)?d.head:"",
-    payee:d.payee||"", date:dmy(d.date), address:d.address||"",
-    no:no, mode:(d.mode||"cash").toUpperCase(),
-    lines:(d.items||[]).filter(function(i){return i.particulars||i.amount;})
-            .map(function(i){return {particulars:i.particulars||"",
-                                     amount:i.amount?inr(i.amount):""};}),
-    words:d.amount?words(d.amount).replace(/^Rupees /,"").replace(/ only$/," Rupees Only"):"",
-    total:d.amount?inr(d.amount):"",
-    signatures:isBuild?[[d.by||"","Accountant"],["","Signature of Contractor"]]
-                      :[[d.by||"","Accountant"],[d.approved||"","Passed by"],
-                        ["","Signature of Receiver"]]
-  });
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement("a");
-  a.href=url; a.download="voucher-"+String(no).replace(/[^\w.-]+/g,"-")+".pdf";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function(){URL.revokeObjectURL(url);},2000);
-}
-function pdfEntry(id){
-  var e=entryById(id); if(!e) return;
-  downloadVoucherPdf({date:e.date,payee:e.payee,items:itemsOf(e),amount:n(e.amount),
-                      category:e.category,head:e.head,account:e.account,address:e.address,
-                      by:e.by,mode:e.mode,approved:e.approved},e.no);
-}
-
 /* ---------------- printing ----------------
    The voucher goes on A5 landscape and the day sheet on A4 landscape. A
    stylesheet can only hold one @page size, so the rule is injected just before
@@ -838,8 +801,12 @@ function addVoucher(ev){
     var prev=entryById(editingId);
     if(!prev){ alert("That draft is no longer in the register."); editingId=null; syncFormMode(); return; }
     if(statusOf(prev)!=="Draft"){ alert("Only a draft can be edited \u2014 amend the voucher instead."); return; }
-    d.id=prev.id; d.no=prev.no; d.ts=prev.ts; d.serverSaved=prev.serverSaved;
+    /* A corrected voucher gets its own number, in the same "-1" series an
+       amendment uses. A draft may already have been printed and handed over,
+       and two papers must never carry the same number. */
+    d.id=prev.id; d.no=amendNo(prev.no); d.ts=prev.ts; d.serverSaved=prev.serverSaved;
     d.status="Draft"; d.amended_from=prev.amended_from||null;
+    d.revisedFrom=prev.no;
     S.entries=S.entries.map(function(x){return x.id===prev.id?d:x;});
   } else {
     d.id=uid(); d.no=amendBase?amendNo(amendBase):nextNo(); d.ts=Date.now();
@@ -1028,6 +995,30 @@ function fillMonths(sel){
   ms.forEach(function(m){ sel.appendChild(new Option(monthLabel(m),m)); });
   sel.value=(ms.indexOf(cur)>=0)?cur:ms[0];
 }
+/* Small inline glyphs: no icon font to load, and they take their colour from
+   the button so both themes work. */
+var ICONS={
+  print:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.2V2.6h7v3.6"/>'+
+        '<rect x="2" y="6.2" width="12" height="5.2" rx="1"/><path d="M4.5 9.6h7v3.9h-7z"/></svg>',
+  edit :'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.3 2.4l2.3 2.3-8 8H3.3v-2.3z"/>'+
+        '<path d="M9.9 3.8l2.3 2.3"/></svg>',
+  del  :'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.8 4.6h10.4M6.3 4.6V3h3.4v1.6"/>'+
+        '<path d="M4.3 4.6l.5 8.9h6.4l.5-8.9"/><path d="M6.7 7v4M9.3 7v4"/></svg>'
+};
+var ACTION_LABEL={print:"Print this voucher",edit:"Edit this draft",
+                  "delete":"Delete this voucher"};
+function actionBtn(name,fn,id){
+  var glyph=name==="print"?ICONS.print:name==="edit"?ICONS.edit:name==="delete"?ICONS.del:null;
+  var b=el("button",glyph?"ibtn":"lnk",glyph?null:name);
+  b.type="button";
+  if(glyph){
+    b.innerHTML=glyph;
+    b.title=ACTION_LABEL[name];
+    b.setAttribute("aria-label",ACTION_LABEL[name]);
+  }
+  b.addEventListener("click",function(){ fn(id); });
+  return b;
+}
 function renderRegister(){
   fillMonths($("#r-month"));
   var mk=$("#r-month").value, cat=$("#r-cat").value;
@@ -1046,8 +1037,9 @@ function renderRegister(){
     total+=n(e.amount);
     var tr=el("tr");
     var vn=el("td","vno",e.no);
-    if(e.amended_from){
-      var af=el("div",null,"amends "+e.amended_from);
+    if(e.amended_from||e.revisedFrom){
+      var af=el("div",null,e.amended_from?("amends "+e.amended_from)
+                                         :("revised from "+e.revisedFrom));
       af.style.cssText="font-size:10.5px;color:var(--muted);margin-top:2px"; vn.appendChild(af);
     }
     tr.appendChild(vn);
@@ -1075,17 +1067,16 @@ function renderRegister(){
     tr.appendChild(md);
     tr.appendChild(el("td","r num",inr(e.amount)));
     /* Only the moves the status allows: a draft is edited, submitted or thrown
-       away; a submitted voucher can only be cancelled; a cancelled one amended. */
-    var x=el("td");
-    var acts=st==="Draft"    ? [["print",printEntry],["pdf",pdfEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
-           : st==="Submitted"? [["print",printEntry],["pdf",pdfEntry],["cancel",cancelEntry]]
-           :                   [["print",printEntry],["pdf",pdfEntry],["amend",amendEntry],["delete",delEntry]];
-    acts.forEach(function(a,i){
-      if(i) x.appendChild(document.createTextNode(" \u00b7 "));
-      var b=el("button","lnk",a[0]); b.type="button";
-      b.addEventListener("click",function(){ a[1](e.id); });
-      x.appendChild(b);
-    });
+       away; a submitted voucher can only be cancelled; a cancelled one amended.
+       Print, edit and delete are icons \u2014 everyone reads them, and four text
+       links wrapped the column onto three lines. Submit, cancel and amend stay
+       as words: they move money in or out of the books, and a bare glyph on an
+       action that cannot be taken back invites a misclick. */
+    var x=el("td","acts");
+    var acts=st==="Draft"    ? [["print",printEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
+           : st==="Submitted"? [["print",printEntry],["cancel",cancelEntry]]
+           :                   [["print",printEntry],["amend",amendEntry],["delete",delEntry]];
+    acts.forEach(function(a){ x.appendChild(actionBtn(a[0],a[1],e.id)); });
     tr.appendChild(x);
     tb.appendChild(tr);
   });
