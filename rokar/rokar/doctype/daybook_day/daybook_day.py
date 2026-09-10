@@ -21,7 +21,6 @@ class DaybookDay(Document):
 
 	def recalculate(self, save=False):
 		self.opening_balance = self.get_opening_balance()
-		self.cash_expenses = self.get_cash_expenses()
 
 		self.closing_balance = (
 			flt(self.opening_balance)
@@ -60,22 +59,6 @@ class DaybookDay(Document):
 		if previous:
 			return flt(previous[0].closing_balance)
 		return flt(frappe.db.get_single_value("Rokar Settings", "opening_cash_balance"))
-
-	def get_cash_expenses(self):
-		"""Only what left the school's cash box. A voucher someone paid out of
-		their own pocket is an expense, but the box never opened for it, so it
-		must not move the day's closing balance."""
-		total = frappe.db.get_value(
-			"Cash Voucher",
-			{
-				"posting_date": self.posting_date,
-				"mode": "Cash",
-				"paid_from": "Cash box",
-				"docstatus": 1,
-			},
-			"sum(amount)",
-		)
-		return flt(total)
 
 
 @frappe.whitelist()

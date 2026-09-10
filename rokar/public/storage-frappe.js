@@ -117,6 +117,7 @@
             out.days[d.posting_date] = {
               date: d.posting_date, opening: d.opening_balance, fee: d.fee_cash,
               bus: d.bus_cash, wdl: d.bank_withdrawal, other: d.other_cash,
+              expenses: d.cash_expenses,
               deposit: d.bank_deposit, upi: d.upi_received, utr: d.bank_utr || "",
               denoms: denoms,
               closed: d.docstatus === 1
@@ -185,7 +186,10 @@
           var existing = r.message || {};
           var body = {
             posting_date: d.date, fee_cash: d.fee, bus_cash: d.bus,
-            bank_withdrawal: d.wdl, other_cash: d.other, bank_deposit: d.deposit,
+            bank_withdrawal: d.wdl, other_cash: d.other,
+            /* typed by the clerk; vouchers never feed this */
+            cash_expenses: d.expenses,
+            bank_deposit: d.deposit,
             bank_utr: d.utr || null,
             upi_received: d.upi, denominations: denominations
           };

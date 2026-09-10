@@ -66,22 +66,6 @@ class CashVoucher(Document):
 		if self.unit == "Construction":
 			self.passed_by = None
 
-	def on_submit(self):
-		self.update_daybook()
-
-	def on_cancel(self):
-		self.update_daybook()
-
-	def update_daybook(self):
-		"""Keep the day's cash-expense total in step with its vouchers. Only
-		cash out of the school's box moves the daybook; anything paid from
-		someone's own pocket is reported but never touches the closing cash."""
-		if self.mode != "Cash" or self.paid_from != "Cash box":
-			return
-		name = frappe.db.exists("Daybook Day", {"posting_date": self.posting_date})
-		if name:
-			frappe.get_doc("Daybook Day", name).recalculate(save=True)
-
 	@property
 	def signature_blocks(self):
 		"""Two blocks for a contractor voucher, three for everything else."""

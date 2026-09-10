@@ -147,7 +147,7 @@
               <div class="line"><label>Cash withdrawn from bank <small>ICICI</small></label><input type="number" class="num" id="d-wdl" min="0" step="1" value="0"></div>
               <div class="line"><label>Other cash receipts</label><input type="number" class="num" id="d-oth" min="0" step="1" value="0"></div>
               <hr class="rule">
-              <div class="line"><label>Cash expenses <small>auto — sum of cash vouchers this date</small></label><span class="fixed num" id="d-exp">—</span></div>
+              <div class="line"><label>Cash expenses <small>cash paid out of the box today — vouchers are not counted here</small></label><input type="number" class="num" id="d-exp" min="0" step="1" value="0"></div>
               <div class="line"><label>Deposited to bank</label><input type="number" class="num" id="d-dep" min="0" step="1" value="0"></div>
               <div class="line"><label>Bank UTR no. <small>prints under BANK (ICICI) on the day sheet</small></label><input type="text" id="d-utr" placeholder="—" style="width:150px;text-align:right;padding:6px 9px"></div>
             </div>
@@ -264,5 +264,6 @@
   window.__ROKAR_PLACE__ = {{ place | tojson }};
 </script>
 <script src="/assets/rokar/storage-frappe.js"></script>
+<script src="/assets/rokar/xlsx.js"></script>
 <script src="/assets/rokar/app.js"></script>
 {%- endblock -%}

@@ -84,7 +84,7 @@
    "fieldname": "cash_expenses",
    "fieldtype": "Currency",
    "label": "Cash expenses (from vouchers)",
-   "read_only": 1
+   "description": "Cash paid out of the box today. Vouchers are not summed here: the school spends from its monthly allocation, not from the fee cash this daybook accounts for."
   },
   {
    "fieldname": "bank_deposit",

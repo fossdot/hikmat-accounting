@@ -190,15 +190,13 @@ function seed(){
   });
   var open=34530;
   [[dd(day-2),5000,800,0,0,2550],[dd(day-1),2500,400,0,0,400],[dd(day),1600,0,10000,0,550]].forEach(function(r){
-    var expenses=S.entries.filter(function(e){return e.date===r[0]&&e.mode==="cash";})
-                          .reduce(function(a,e){return a+e.amount;},0);
     var recd=r[1]+r[2]+r[4];
     var counted=(r[0]===dd(day-2))?recd-100:recd; /* mirrors the real 01-09 ₹100 gap */
     var dn={}; var rem=counted;
     DENOMS.forEach(function(f){ var q=Math.floor(rem/f); if(q){dn[f]=q; rem-=q*f;} });
-    S.days[r[0]]={date:r[0],opening:open,fee:r[1],bus:r[2],wdl:r[3],other:r[4],deposit:0,upi:r[5],
-                  denoms:dn,closed:true,sample:true};
-    open=open+r[1]+r[2]+r[3]+r[4]-expenses-0;
+    S.days[r[0]]={date:r[0],opening:open,expenses:0,fee:r[1],bus:r[2],wdl:r[3],other:r[4],
+                  deposit:0,upi:r[5],denoms:dn,closed:true,sample:true};
+    open=open+r[1]+r[2]+r[3]+r[4];
   });
   S.accounts=[]; S.payees=[]; S.particulars=[];
   E.forEach(function(r){
@@ -306,7 +304,7 @@ function buildStatic(){
   $("#r-cat").addEventListener("change",renderRegister);
   $("#p-month").addEventListener("change",renderReports);
   $("#d-date").addEventListener("change",loadDay);
-  ["d-fee","d-bus","d-wdl","d-oth","d-dep","d-upi"].forEach(function(id){ $("#"+id).addEventListener("input",calcDay); });
+  ["d-fee","d-bus","d-wdl","d-oth","d-exp","d-dep","d-upi"].forEach(function(id){ $("#"+id).addEventListener("input",calcDay); });
   $("#d-denoms").addEventListener("input",calcDay);
   $("#d-save").addEventListener("click",saveDay);
   $("#d-clear").addEventListener("click",function(){ $$("#d-denoms input").forEach(function(i){i.value="";}); calcDay(); });
@@ -364,7 +362,7 @@ function startReal(){
            value:"0",yes:"Start real books",yesHindi:"शुरू करें",danger:true},function(open){
     S.entries=[]; S.days={}; S.sample=false; S.openingSeed=n(open);
     var d=todayISO();
-    S.days[d]={date:d,opening:S.openingSeed,fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+    S.days[d]={date:d,opening:S.openingSeed,fee:0,bus:0,wdl:0,other:0,expenses:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
     persist(); renderAll();
   });
 }
@@ -677,7 +675,7 @@ function setPageSize(spec){
 function printDay(){
   var dt=$("#d-date").value;
   if(!dt){ note("Pick a date first."); return; }
-  var opening=openingFor(dt), exp=cashExpFor(dt);
+  var opening=openingFor(dt), exp=n($("#d-exp").value);
   var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
       oth=n($("#d-oth").value), dep=n($("#d-dep").value), upi=n($("#d-upi").value);
   var utr=($("#d-utr").value||"").trim();
@@ -958,7 +956,7 @@ function addVoucher(ev){
     if(it.particulars && S.particulars.indexOf(it.particulars)<0) S.particulars.unshift(it.particulars);
   });
   S.particulars=S.particulars.slice(0,400);     /* keep the suggestion list bounded */
-  if(!S.days[d.date]) S.days[d.date]={date:d.date,opening:openingFor(d.date),fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+  if(!S.days[d.date]) S.days[d.date]={date:d.date,opening:openingFor(d.date),fee:0,bus:0,wdl:0,other:0,expenses:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
   /* The draft stays in the form, so printing it or submitting it is the next
      click rather than a hunt through the register. */
   persist(); renderAll(); syncFormMode();
@@ -1018,19 +1016,16 @@ function delEntry(id){
 }
 
 /* ---------------- daybook ---------------- */
-function cashExpFor(date){
-  /* Only money that actually left the school's cash box. An expense a trustee
-     or member of staff paid themselves — by UPI, or in cash from their own
-     pocket — is still an expense, but it did not touch the box, so it must not
-     move the day's closing balance. It stays in the monthly reports. */
-  return posted(S.entries)
-           .filter(function(e){return e.date===date&&e.mode==="cash"&&srcOf(e)==="box";})
-           .reduce(function(a,e){return a+n(e.amount);},0);
-}
+/* What the clerk records as cash paid out of the box that day.
+   Vouchers deliberately do not feed this: the school spends from a fixed
+   monthly allocation, not from the fee cash the daybook accounts for, so
+   summing vouchers here would take money out of the drawer twice. The
+   foundation's own day sheet leaves this row blank for the same reason. */
+function expensesOf(date){ return n((S.days[date]||{}).expenses); }
 function dayKeys(){ return Object.keys(S.days).sort(); }
 function closingOf(d){
   var day=S.days[d]; if(!day) return 0;
-  return n(day.opening)+n(day.fee)+n(day.bus)+n(day.wdl)+n(day.other)-cashExpFor(d)-n(day.deposit);
+  return n(day.opening)+n(day.fee)+n(day.bus)+n(day.wdl)+n(day.other)-n(day.expenses)-n(day.deposit);
 }
 function openingFor(date){
   var prior=dayKeys().filter(function(k){return k<date;});
@@ -1039,9 +1034,10 @@ function openingFor(date){
 }
 function loadDay(){
   var d=$("#d-date").value; if(!d) return;
-  var day=S.days[d]||{date:d,opening:openingFor(d),fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+  var day=S.days[d]||{date:d,opening:openingFor(d),fee:0,bus:0,wdl:0,other:0,expenses:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
   $("#d-fee").value=n(day.fee); $("#d-bus").value=n(day.bus); $("#d-wdl").value=n(day.wdl);
   $("#d-oth").value=n(day.other); $("#d-dep").value=n(day.deposit); $("#d-upi").value=n(day.upi);
+  $("#d-exp").value=n(day.expenses);
   $("#d-utr").value=day.utr||"";
   $$("#d-denoms input").forEach(function(i){ var q=(day.denoms||{})[i.dataset.face]; i.value=q?q:""; });
   $("#d-note").textContent=day.closed?"Closed":"Open";
@@ -1049,11 +1045,10 @@ function loadDay(){
 }
 function calcDay(){
   var d=$("#d-date").value; if(!d) return;
-  var opening=openingFor(d), exp=cashExpFor(d);
+  var opening=openingFor(d), exp=n($("#d-exp").value);
   var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
       oth=n($("#d-oth").value), dep=n($("#d-dep").value);
   $("#d-open").textContent=inr(opening);
-  $("#d-exp").textContent=inr(exp);
   $("#d-close").textContent=inr(opening+fee+bus+wdl+oth-exp-dep);
   var counted=0;
   $$("#d-denoms input").forEach(function(i){
@@ -1082,7 +1077,8 @@ function saveDay(){
   var d=$("#d-date").value; if(!d) return;
   var dn={};
   $$("#d-denoms input").forEach(function(i){ var q=n(i.value); if(q) dn[i.dataset.face]=q; });
-  S.days[d]={date:d,opening:openingFor(d),fee:n($("#d-fee").value),bus:n($("#d-bus").value),
+  S.days[d]={date:d,opening:openingFor(d),expenses:n($("#d-exp").value),
+             fee:n($("#d-fee").value),bus:n($("#d-bus").value),
              wdl:n($("#d-wdl").value),other:n($("#d-oth").value),deposit:n($("#d-dep").value),
              upi:n($("#d-upi").value),utr:$("#d-utr").value.trim(),denoms:dn,closed:true};
   persist(); $("#d-note").textContent="Closed"; renderAll();
@@ -1107,7 +1103,7 @@ function renderDayTable(){
     var tr=el("tr"); var td=el("td","empty","No days recorded in "+monthLabel(mk)+" yet."); td.colSpan=10; tr.appendChild(td); tb.appendChild(tr); return;
   }
   keys.forEach(function(k){
-    var day=S.days[k], exp=cashExpFor(k), counted=countedOf(k), coll=n(day.fee)+n(day.bus)+n(day.other);
+    var day=S.days[k], exp=expensesOf(k), counted=countedOf(k), coll=n(day.fee)+n(day.bus)+n(day.other);
     var tr=el("tr");
     tr.appendChild(el("td",null,dmy(k)));
     [day.opening,day.fee,day.bus,day.wdl,exp,day.deposit,closingOf(k),day.upi].forEach(function(v,i){
@@ -1358,30 +1354,56 @@ function exportMonth(){
   var mk=$("#p-month").value;
   askGiven(mk,false,function(given){ writeMonth(mk,given); });
 }
+/* The unit names the foundation's own sheets use. */
+var UNIT_TITLE={School:"SCHOOL EXPENSES",
+                Residence:"TEACHERS' BLOCK EXPENSES",
+                STL:"SCHOOL TO LIVELIHOOD EXPENSES",
+                Construction:"CONSTRUCTION EXPENSES"};
+
+/* One sheet per unit, laid out like the sheet the foundation already keeps: a
+   banner, then Sl.No. / Date / Cost Head / Discription of Items / Amount /
+   Exp By, then Total with the month's budget and what is left of it. Cost Head
+   appears for STL alone, which is the only unit that carries one. */
 function writeMonth(mk,given,units){
   var spent=spentByUnit(mk);
-  var wanted=units&&units.length?units:CATS;
-  var rows=[[ORG],["MONTHLY EXPENSES \u2014 "+monthLabel(mk).toUpperCase()],[]];
-  var gt=0, anyGiven=false;
-  CATS.filter(function(c){ return wanted.indexOf(c)>=0; }).forEach(function(c){
-    var mine=posted(S.entries).filter(function(e){return ym(e.date)===mk&&e.category===c;})
-               .sort(function(a,b){return a.date<b.date?-1:1;});
-    if(!mine.length&&given[c]===undefined) return;
-    rows.push([c+" Expenses","","","","Given",given[c]===undefined?"":n(given[c])]);
-    rows.push(["Sl.No.","Date","Particular","Amount","Exp By","Voucher No"]);
-    var sl=0;
-    mine.forEach(function(e){
-      itemsOf(e).forEach(function(it){
-        rows.push([++sl,dmy(e.date),it.particulars,it.amount,e.by,e.no]);
+  var wanted=(units&&units.length?units:CATS).filter(function(c){ return CATS.indexOf(c)>=0; });
+  var label=monthLabel(mk);
+
+  var sheets=wanted.map(function(c){
+    var heads=(c==="STL");
+    var header=heads
+      ? ["Sl.No.","Date","Cost Head","Discription of Items","Amount","Exp By"]
+      : ["Sl.No.","Date","Discription of Items","Amount","Exp By"];
+    var widths=heads?[8,13,22,54,12,16]:[8,13,60,12,16];
+
+    var rows=[], sl=0;
+    posted(S.entries)
+      .filter(function(e){ return ym(e.date)===mk&&e.category===c; })
+      .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:(a.no<b.no?-1:1); })
+      .forEach(function(e){
+        itemsOf(e).forEach(function(it){
+          sl++;
+          rows.push(heads
+            ? [sl,dmy(e.date),e.head||"",it.particulars||"",n(it.amount),e.by||""]
+            : [sl,dmy(e.date),it.particulars||"",n(it.amount),e.by||""]);
+        });
       });
-    });
-    var bal=n(given[c])-spent[c];
-    if(given[c]!==undefined){ anyGiven=true; gt+=bal; }
-    rows.push(["Total","","",spent[c],"Balance Amt.",given[c]===undefined?"":bal]);
-    rows.push([]);
+
+    var g=given&&given[c]!==undefined?n(given[c]):null;
+    var footer=[["Total",spent[c]]];
+    if(g!==null){
+      footer.push(["Given",g]);
+      footer.push(["Balance Amt.",g-spent[c]]);
+    }
+    return {name:c,title:(UNIT_TITLE[c]||c.toUpperCase())+" - "+label,
+            header:header,widths:widths,rows:rows,footer:footer};
   });
-  if(anyGiven) rows.push(["","","","","G.T",gt]);
-  offer("monthly-report-"+mk+".csv",csv(rows));
+
+  if(!window.RokarXlsx){
+    note("The spreadsheet writer did not load \u2014 reload the page and try again.");
+    return;
+  }
+  offerBlob("expenses-"+label.replace(/ /g,"-")+".xlsx",RokarXlsx.build(sheets));
 }
 
 /* ---------------- reports ---------------- */
@@ -1521,13 +1543,30 @@ function renderReports(){
 }
 
 /* ---------------- exports ---------------- */
-function offer(filename,text,mime){
-  var blob=new Blob(["\ufeff"+text],{type:(mime||"text/csv")+";charset=utf-8"});
+/* Chrome takes the saved file name from the anchor's download attribute, but
+   only if the element is still in the document and the blob URL still alive
+   when the download actually begins. Tearing either down in the same tick as
+   the click loses the name, and the file lands as a blob UUID with no
+   extension, which nothing will open. So the teardown waits. */
+function offerBlob(filename,blob){
   var url=URL.createObjectURL(blob);
   var a=document.createElement("a");
-  a.href=url; a.download=filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function(){URL.revokeObjectURL(url);},2000);
+  a.href=url;
+  a.setAttribute("download",filename);
+  a.style.display="none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){
+    if(a.parentNode) a.parentNode.removeChild(a);
+    URL.revokeObjectURL(url);
+  },20000);
+}
+function offer(filename,text,mime){
+  /* The byte-order mark is what makes Excel read a CSV as UTF-8; JSON must not
+     have one, or a strict parser chokes on the first character. */
+  var json=(mime||"").indexOf("json")>=0;
+  offerBlob(filename,new Blob([json?text:"\ufeff"+text],
+                              {type:(mime||"text/csv")+";charset=utf-8"}));
 }
 
 function exportRegister(){
@@ -1564,7 +1603,7 @@ function exportDaybook(){
   var rows=[["Date","Opening","Fee Cash","Bus Cash","Other Cash","Bank Withdrawal","Cash Expenses","Bank Deposit","Closing","UPI (memo)","Counted","Variance"]];
   dayKeys().filter(function(k){return ym(k)===mk;}).forEach(function(k){
     var d=S.days[k], coll=n(d.fee)+n(d.bus)+n(d.other), counted=countedOf(k);
-    rows.push([dmy(k),d.opening,d.fee,d.bus,d.other,d.wdl,cashExpFor(k),d.deposit,closingOf(k),d.upi,
+    rows.push([dmy(k),d.opening,d.fee,d.bus,d.other,d.wdl,expensesOf(k),d.deposit,closingOf(k),d.upi,
                Object.keys(d.denoms||{}).length?counted:"",Object.keys(d.denoms||{}).length?counted-coll:""]);
   });
   offer("daybook-"+mk+".csv",csv(rows));
