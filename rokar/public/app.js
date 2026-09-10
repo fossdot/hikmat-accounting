@@ -69,6 +69,21 @@ function dialogOpen(o,then,kind){
   inp.hidden=(kind!=="text");
   if(kind==="text"){ inp.value=o.value||""; inp.placeholder=o.placeholder||""; }
 
+  var box=$("#ask-choices");
+  box.hidden=(kind!=="choose");
+  box.innerHTML="";
+  if(kind==="choose"){
+    (o.choices||[]).forEach(function(c){
+      var lab=el("label"), cb=document.createElement("input");
+      cb.type="checkbox"; cb.value=c.value; cb.checked=!!c.checked;
+      lab.appendChild(cb);
+      lab.appendChild(el("span",null,c.label));
+      if(c.hindi) lab.appendChild(el("span","hi",c.hindi));
+      if(c.amount!==undefined) lab.appendChild(el("span","amt",c.amount));
+      box.appendChild(lab);
+    });
+  }
+
   var yes=$("#ask-yes");
   yes.className="btn"+(o.danger?" danger":"");
   yes.innerHTML="";
@@ -89,13 +104,18 @@ function dialogOpen(o,then,kind){
   (kind==="text"?inp:yes).focus();
 }
 function dialogAccept(){
-  var then=askThen, wantsText=!$("#ask-input").hidden, val=$("#ask-input").value;
+  var then=askThen;
+  var wantsText=!$("#ask-input").hidden, val=$("#ask-input").value;
+  var wantsChoice=!$("#ask-choices").hidden;
+  var picked=wantsChoice ? $$("#ask-choices input:checked").map(function(c){return c.value;}) : null;
   dialogHide();
-  if(then) then(wantsText?val:undefined);
+  if(!then) return;
+  then(wantsText?val:wantsChoice?picked:undefined);
 }
 function ask(o,then){ dialogOpen(o,then,"confirm"); }
 function askText(o,then){ dialogOpen(o,then,"text"); }
 function note(o,then){ dialogOpen(o,then,"note"); }
+function askChoose(o,then){ dialogOpen(o,then,"choose"); }
 function el(t,c,x){var e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;}
 function n(v){v=Number(v); return isFinite(v)?v:0;}
 function inr(v){
@@ -290,6 +310,11 @@ function buildStatic(){
   $("#d-denoms").addEventListener("input",calcDay);
   $("#d-save").addEventListener("click",saveDay);
   $("#d-clear").addEventListener("click",function(){ $$("#d-denoms input").forEach(function(i){i.value="";}); calcDay(); });
+  var rd=$("#r-download");
+  rd.innerHTML=ICONS.down;
+  rd.title="Download this month\u2019s report";
+  rd.setAttribute("aria-label","Download this month\u2019s report");
+  rd.addEventListener("click",downloadFromRegister);
   $("#x-vouchers").addEventListener("click",exportRegister);
   $("#x-tally").addEventListener("click",exportTally);
   $("#x-month").addEventListener("click",exportMonth);
@@ -1122,7 +1147,9 @@ var ICONS={
   edit :'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.3 2.4l2.3 2.3-8 8H3.3v-2.3z"/>'+
         '<path d="M9.9 3.8l2.3 2.3"/></svg>',
   del  :'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.8 4.6h10.4M6.3 4.6V3h3.4v1.6"/>'+
-        '<path d="M4.3 4.6l.5 8.9h6.4l.5-8.9"/><path d="M6.7 7v4M9.3 7v4"/></svg>'
+        '<path d="M4.3 4.6l.5 8.9h6.4l.5-8.9"/><path d="M6.7 7v4M9.3 7v4"/></svg>',
+  down :'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.4v7.5"/>'+
+        '<path d="M4.9 7l3.1 3.1L11.1 7"/><path d="M2.8 13.2h10.4"/></svg>'
 };
 var ACTION_LABEL={print:"Print this voucher",edit:"Edit this draft",
                   "delete":"Delete this voucher"};
@@ -1233,13 +1260,12 @@ function spentByUnit(mk){
 }
 /* Asked only for units that actually spent, so a month with School vouchers
    alone is one question, not four. */
-function askGiven(mk,force,then){
+/* Asks the month's budget for each unit in turn, one dialog after another, and
+   remembers the answers against that month. */
+function askGivenList(mk,units,then){
   var have=givenFor(mk), spent=spentByUnit(mk), got={};
-  /* Only units that spent are worth funding, and only unanswered ones are
-     asked, so a month already filled in goes straight through. */
-  var relevant=CATS.filter(function(c){ return spent[c]||have[c]!==undefined; });
-  relevant.forEach(function(c){ if(have[c]!==undefined) got[c]=n(have[c]); });
-  var toAsk=relevant.filter(function(c){ return force||have[c]===undefined; });
+  CATS.forEach(function(c){ if(have[c]!==undefined) got[c]=n(have[c]); });
+  var toAsk=units||[];
 
   function step(i){
     if(i>=toAsk.length){
@@ -1257,6 +1283,37 @@ function askGiven(mk,force,then){
       function(v){ got[c]=n(v); step(i+1); });
   }
   step(0);
+}
+/* The reports tab asks only for units that spent and are still unanswered. */
+function askGiven(mk,force,then){
+  var have=givenFor(mk), spent=spentByUnit(mk);
+  var toAsk=CATS.filter(function(c){
+    if(!spent[c]&&have[c]===undefined) return false;
+    return force||have[c]===undefined;
+  });
+  if(!toAsk.length){ if(then) then(givenFor(mk)); return; }
+  askGivenList(mk,toAsk,then);
+}
+
+/* The register's download icon: pick the units, give each one its budget for
+   the month, then write the file. The month is the one the register is showing. */
+function downloadFromRegister(){
+  var mk=$("#r-month").value, spent=spentByUnit(mk), only=$("#r-cat").value;
+  askChoose({title:"Which units go in the "+monthLabel(mk)+" report?",
+             hindi:"रिपोर्ट में कौन-कौन इकाई?",
+             note:"Submitted vouchers only \u2014 drafts and cancelled ones stay out.",
+             noteHindi:"केवल जमा किए गए वाउचर; ड्राफ़्ट और रद्द बाहर रहेंगे।",
+             choices:CATS.map(function(c){
+               return {value:c,label:c,amount:spent[c]?inr(spent[c]):"\u2014",
+                       checked:only?(c===only):!!spent[c]};
+             }),
+             yes:"Next",yesHindi:"आगे"},function(units){
+    if(!units||!units.length){
+      note({title:"Pick at least one unit.",hindi:"कम से कम एक इकाई चुनें।"});
+      return;
+    }
+    askGivenList(mk,units,function(given){ writeMonth(mk,given,units); });
+  });
 }
 function renderGiven(){
   var mk=$("#p-month").value, given=givenFor(mk), spent=spentByUnit(mk);
@@ -1301,11 +1358,12 @@ function exportMonth(){
   var mk=$("#p-month").value;
   askGiven(mk,false,function(given){ writeMonth(mk,given); });
 }
-function writeMonth(mk,given){
+function writeMonth(mk,given,units){
   var spent=spentByUnit(mk);
+  var wanted=units&&units.length?units:CATS;
   var rows=[[ORG],["MONTHLY EXPENSES \u2014 "+monthLabel(mk).toUpperCase()],[]];
   var gt=0, anyGiven=false;
-  CATS.forEach(function(c){
+  CATS.filter(function(c){ return wanted.indexOf(c)>=0; }).forEach(function(c){
     var mine=posted(S.entries).filter(function(e){return ym(e.date)===mk&&e.category===c;})
                .sort(function(a,b){return a.date<b.date?-1:1;});
     if(!mine.length&&given[c]===undefined) return;
