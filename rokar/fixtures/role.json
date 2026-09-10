@@ -1,0 +1,14 @@
+[
+ {
+  "doctype": "Role",
+  "role_name": "Rokar Clerk",
+  "desk_access": 1,
+  "__islocal": 1
+ },
+ {
+  "doctype": "Role",
+  "role_name": "Rokar Auditor",
+  "desk_access": 1,
+  "__islocal": 1
+ }
+]

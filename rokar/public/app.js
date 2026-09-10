@@ -1,0 +1,1435 @@
+"use strict";
+/* ---------------- constants ---------------- */
+/* The 2000 note is out of circulation; the school never handles one. */
+var DENOMS=[500,200,100,50,20,10,5,2,1];
+var CATS=["School","Residence","STL","Construction"];
+/* Cost heads apply to STL alone; every other unit books straight to its account. */
+var STL_HEADS=["Program Delivery","Beneficiary Support","Contingency"];
+var HEADS_ALL=STL_HEADS;                       /* report columns */
+function headsFor(cat){ return cat==="STL"?STL_HEADS:[]; }
+/* Placeholders only. The accountant who signs each voucher and the trustees who
+   pass it are entered in the app itself (+ and the pencil beside each list) and
+   live in the browser or on the site — never in this repository. */
+var DEFAULT_PEOPLE=["Accountant"];
+var DEFAULT_APPROVERS=["Approver 1","Approver 2","Approver 3","Approver 4"];
+var ROSTER_VERSION=2;   /* bump when the standing roster changes; see applyLoaded */
+var DEFAULT_PAYEES=["Local vegetable market"];   /* generic on purpose */
+var DEFAULT_ACCOUNTS={School:"School EXP",Residence:"Residence EXP",STL:"STL A/c",Construction:"Construction A/c"};
+var ORG="Noor Girls High School";
+var PLACE="Meghwal, Mathiya";
+var FYCODE="26-27";
+
+/* ---------------- state ---------------- */
+var S={entries:[],days:{},mode:"local",sample:true,openingSeed:0,
+       people:DEFAULT_PEOPLE.slice(),approvers:DEFAULT_APPROVERS.slice(),
+       payees:DEFAULT_PAYEES.slice(),accounts:[],particulars:[],given:{}};
+
+
+/* ---------------- helpers ---------------- */
+function $(s,r){return (r||document).querySelector(s);}
+function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));}
+function el(t,c,x){var e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;}
+function n(v){v=Number(v); return isFinite(v)?v:0;}
+function inr(v){
+  v=Math.round(n(v));
+  var neg=v<0; v=Math.abs(v);
+  var s=String(v), last3=s.slice(-3), rest=s.slice(0,-3);
+  if(rest) last3=","+last3;
+  rest=rest.replace(/\B(?=(\d{2})+(?!\d))/g,",");
+  return (neg?"-":"")+rest+last3;
+}
+function rs(v){return "₹"+inr(v);}
+function iso(d){var p=function(x){return String(x).padStart(2,"0");}; return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());}
+function todayISO(){return iso(new Date());}
+function ym(d){return (d||"").slice(0,7);}
+function dmy(d){if(!d)return ""; var a=d.split("-"); return a[2]+"-"+a[1]+"-"+a[0];}
+function monthLabel(k){
+  if(!k) return "";
+  var M=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var a=k.split("-"); return M[Number(a[1])-1]+" "+a[0];
+}
+/* Indian numbering, words */
+var ONES=["","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+var TENS=["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+function under100(x){ if(x<20) return ONES[x]; var t=TENS[Math.floor(x/10)], o=ONES[x%10]; return o?t+"-"+o:t; }
+function under1000(x){ var h=Math.floor(x/100), r=x%100; var out=[]; if(h)out.push(ONES[h]+" hundred"); if(r)out.push((h?"and ":"")+under100(r)); return out.join(" "); }
+function words(v){
+  v=Math.round(n(v));
+  if(v<=0) return "—";
+  var parts=[], units=[[10000000,"crore"],[100000,"lakh"],[1000,"thousand"]];
+  for(var i=0;i<units.length;i++){
+    var d=Math.floor(v/units[i][0]);
+    if(d){ parts.push((d<1000?under1000(d):String(d))+" "+units[i][1]); v%=units[i][0]; }
+  }
+  if(v) parts.push(under1000(v));
+  var s=parts.join(" ");
+  return "Rupees "+s.charAt(0).toUpperCase()+s.slice(1)+" only";
+}
+function csv(rows){
+  return rows.map(function(r){
+    return r.map(function(c){
+      c=(c==null?"":String(c));
+      return /[",\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c;
+    }).join(",");
+  }).join("\r\n");
+}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+
+/* ---------------- sample seed ---------------- */
+function seed(){
+  var t=new Date(), y=t.getFullYear(), m=t.getMonth();
+  function dd(day){var d=new Date(y,m,day); return iso(d);}
+  var day=Math.max(3,Math.min(t.getDate(),26));
+  var E=[
+    /* account, payee, address, particulars, amount, unit, head, by, mode */
+    ["Residence EXP","Gas agency","Mathiya","Gas cylinder refilling 1 pcs",1070,"Residence","Program Delivery","Accountant","cash"],
+    ["Residence EXP","Local vegetable market","Mathiya","Bhindi 1kg, mirchi 250g, aloo 5kg",265,"Residence","Program Delivery","Accountant","cash"],
+    ["School EXP","Electrician","Mathiya","Light repairing, labour charge",200,"School","Program Delivery","Accountant","cash"],
+    ["School EXP","Electrical shop","Lauriya","Classroom fan repairing 6 pcs",500,"School","Program Delivery","Accountant","cash"],
+    ["School EXP","Petrol pump","Ramnagar","Petrol refilling - school bus",1200,"School","Program Delivery","Accountant","cash"],
+    ["School EXP","Stationery shop","Bettiah","A4 paper 1 packet, printer ink",995,"School","Beneficiary Support","Accountant","upi"],
+    ["STL A/c","Form processing agent","Mathiya","Scholarship form processing - 9 students",450,"STL","Beneficiary Support","Accountant","cash"],
+    ["STL A/c","Travel agent","Meghwal","Emergency travel - district office",380,"STL","Contingency","Accountant","cash"],
+    ["Science Block Floor-3 Construction A/c","Building contractor","Lauriya","Payment of Mobilization Advance",50000,"Construction","Program Delivery","Accountant","bank"]
+  ];
+  var dayOf=[day-2,day-2,day-1,day-1,day,day,day,day-1,day];
+  S.entries=E.map(function(r,i){
+    return {id:uid(),no:"NGHS/"+FYCODE+"/"+String(i+1).padStart(4,"0"),date:dd(dayOf[i]),
+            account:r[0],payee:r[1],address:r[2],
+            items:[{particulars:r[3],amount:r[4]}],particulars:r[3],amount:r[4],
+            category:r[5],head:(r[5]==="STL"?r[6]:""),by:r[7],mode:r[8],approved:"Approver 1",sample:true,ts:Date.now()+i};
+  });
+  var open=34530;
+  [[dd(day-2),5000,800,0,0,2550],[dd(day-1),2500,400,0,0,400],[dd(day),1600,0,10000,0,550]].forEach(function(r){
+    var expenses=S.entries.filter(function(e){return e.date===r[0]&&e.mode==="cash";})
+                          .reduce(function(a,e){return a+e.amount;},0);
+    var recd=r[1]+r[2]+r[4];
+    var counted=(r[0]===dd(day-2))?recd-100:recd; /* mirrors the real 01-09 ₹100 gap */
+    var dn={}; var rem=counted;
+    DENOMS.forEach(function(f){ var q=Math.floor(rem/f); if(q){dn[f]=q; rem-=q*f;} });
+    S.days[r[0]]={date:r[0],opening:open,fee:r[1],bus:r[2],wdl:r[3],other:r[4],deposit:0,upi:r[5],
+                  denoms:dn,closed:true,sample:true};
+    open=open+r[1]+r[2]+r[3]+r[4]-expenses-0;
+  });
+  S.accounts=[]; S.payees=[]; S.particulars=[];
+  E.forEach(function(r){
+    if(S.accounts.indexOf(r[0])<0) S.accounts.push(r[0]);
+    if(S.payees.indexOf(r[1])<0) S.payees.push(r[1]);
+    if(S.particulars.indexOf(r[3])<0) S.particulars.push(r[3]);
+  });
+  S.payees.sort();
+  S.openingSeed=34530; S.sample=true;
+}
+
+/* ---------------- persistence ---------------- */
+function payload(){return {v:1,rosterVersion:ROSTER_VERSION,savedAt:new Date().toISOString(),
+                           entries:S.entries,days:S.days,sample:S.sample,openingSeed:S.openingSeed,
+                           people:S.people,approvers:S.approvers,payees:S.payees,
+                           accounts:S.accounts,particulars:S.particulars,given:S.given};}
+function roster(){return {sample:S.sample,openingSeed:S.openingSeed,org:ORG,fy:FYCODE,
+                          people:S.people,approvers:S.approvers,accounts:S.accounts};}
+function saveLocal(){
+  var r=Storage.save(payload());
+  var el2=document.getElementById("backup-note");
+  if(!r.ok&&el2){ el2.textContent="Could not save to this browser: "+r.error; el2.style.color="var(--bad)"; }
+}
+function persist(){ saveLocal(); }
+
+/* ---------------- boot ---------------- */
+function boot(){
+  buildStatic();
+  var raw=Storage.load();
+  if(raw && typeof raw.then==="function"){
+    /* Frappe adapter: render the empty shell now, fill it when the books arrive. */
+    renderAll();
+    raw.then(applyLoaded).catch(function(e){
+      setBanner("info","Could not reach the server",
+                (e&&e.message)||"The books could not be loaded. Nothing has been changed.");
+    });
+  } else {
+    applyLoaded(raw);
+  }
+}
+function applyLoaded(raw){
+  try{
+    if(raw){ var p=JSON.parse(raw);
+             S.entries=p.entries||[]; S.days=p.days||{}; S.sample=!!p.sample; S.openingSeed=n(p.openingSeed);
+             if(p.people&&p.people.length) S.people=p.people;
+             if(p.approvers&&p.approvers.length) S.approvers=p.approvers;
+             if(p.payees&&p.payees.length) S.payees=p.payees;
+             if(p.accounts) S.accounts=p.accounts;
+             if(p.particulars) S.particulars=p.particulars;
+             if(p.given) S.given=p.given;
+             /* The standing roster is set by the foundation, not by the browser:
+                an older save keeps its payees but takes the current staff list. */
+             if(n(p.rosterVersion)<ROSTER_VERSION){
+               S.people=DEFAULT_PEOPLE.slice(); S.approvers=DEFAULT_APPROVERS.slice();
+             } }
+  }catch(e){}
+  if(!S.entries.length && !Object.keys(S.days).length && Storage.mode!=="frappe") seed();
+  renderAll();
+}
+
+/* Storage lives in Storage.load/save (storage.js) so this file never
+   assumes where the books are kept. Swap that module to move off the browser. */
+
+/* ---------------- static build ---------------- */
+function buildStatic(){
+  $("#f-date").value=todayISO();
+  $("#d-date").value=todayISO();
+  buildCatChips();
+  buildHeadChips("School");
+  suggestAccount("School");
+  applySigRules("School");
+  setItems();
+  fillPeople();
+  var tb=$("#d-denoms");
+  DENOMS.forEach(function(f){
+    var tr=el("tr");
+    tr.appendChild(el("td","face","₹"+f));
+    var td=el("td","r"); var i=el("input"); i.type="number"; i.min="0"; i.step="1"; i.className="num";
+    i.dataset.face=f; i.value=""; i.placeholder="0"; td.appendChild(i); tr.appendChild(td);
+    var v=el("td","r num","0"); v.dataset.val=f; tr.appendChild(v);
+    tb.appendChild(tr);
+  });
+  /* tabs */
+  $$(".tab").forEach(function(t){
+    t.addEventListener("click",function(){ showTab(t.dataset.v); });
+  });
+  $("#add-by").addEventListener("click",function(){ addPerson("people","#f-by","Name of the person who spent the cash"); });
+  $("#add-appr").addEventListener("click",function(){ addPerson("approvers","#f-appr","Name of the person who passes the voucher"); });
+  $("#add-payee").addEventListener("click",function(){ addPerson("payees","#f-payee","Name of the vendor, contractor or person being paid"); });
+  $("#edit-by").addEventListener("click",function(){ managePerson("people","#f-by","by"); });
+  $("#edit-appr").addEventListener("click",function(){ managePerson("approvers","#f-appr","approved"); });
+  $("#edit-payee").addEventListener("click",function(){ managePerson("payees","#f-payee","payee"); });
+  $("#v-submit").addEventListener("click",function(){ if(editingId) submitEntry(editingId); });
+  $("#d-print").addEventListener("click",printDay);
+  $("#btn-pdf").addEventListener("click",function(){
+    var cur=editingId?entryById(editingId):null;
+    downloadVoucherPdf(formData(),cur?cur.no:(amendBase?amendNo(amendBase):nextNo()));
+  });
+  $("#add-item").addEventListener("click",function(){ addItemRow(); });
+  ["f-date","f-payee","f-addr","f-acct","f-by","f-mode","f-appr"].forEach(function(id){
+    $("#"+id).addEventListener("input",renderSlip);
+  });
+  $("#vform").addEventListener("submit",addVoucher);
+  $("#v-clear").addEventListener("click",resetForm);
+  $("#btn-print").addEventListener("click",function(){
+    $("#printarea").innerHTML=$("#slip").outerHTML; setPageSize("A5 landscape"); window.print();
+  });
+  $("#r-month").addEventListener("change",renderRegister);
+  $("#r-cat").addEventListener("change",renderRegister);
+  $("#p-month").addEventListener("change",renderReports);
+  $("#d-date").addEventListener("change",loadDay);
+  ["d-fee","d-bus","d-wdl","d-oth","d-dep","d-upi"].forEach(function(id){ $("#"+id).addEventListener("input",calcDay); });
+  $("#d-denoms").addEventListener("input",calcDay);
+  $("#d-save").addEventListener("click",saveDay);
+  $("#d-clear").addEventListener("click",function(){ $$("#d-denoms input").forEach(function(i){i.value="";}); calcDay(); });
+  $("#x-vouchers").addEventListener("click",exportRegister);
+  $("#x-tally").addEventListener("click",exportTally);
+  $("#x-month").addEventListener("click",exportMonth);
+  $("#p-given-edit").addEventListener("click",function(){
+    askGiven($("#p-month").value,true); renderReports();
+  });
+  $("#x-daybook").addEventListener("click",exportDaybook);
+  $("#x-backup").addEventListener("click",backupNow);
+  $("#x-restore").addEventListener("click",function(){ $("#f-restore").click(); });
+  $("#f-restore").addEventListener("change",function(){ if(this.files[0]) restoreFrom(this.files[0]); this.value=""; });
+}
+
+/* ---------------- banner ---------------- */
+var forcedBanner=null;
+function setBanner(kind,title,body){ forcedBanner={kind:kind,title:title,body:body}; renderBanner(); }
+function renderBanner(){
+  var slot=$("#banner-slot"); slot.innerHTML="";
+  if(forcedBanner){
+    var b=el("div","banner "+forcedBanner.kind);
+    b.appendChild(el("b",null,forcedBanner.title)); b.appendChild(el("span",null,forcedBanner.body));
+    slot.appendChild(b); return;
+  }
+  if(S.sample){
+    var s=el("div","banner sample");
+    s.appendChild(el("b",null,"Sample data"));
+    s.appendChild(el("span",null,"Seven example vouchers and three daybook days are loaded so you can see the reports working. Clear them before the first real entry."));
+    var btn=el("button","btn sm","Clear and start real books"); btn.type="button";
+    btn.addEventListener("click",startReal);
+    s.appendChild(btn); slot.appendChild(s);
+  }
+}
+function startReal(){
+  var open=prompt("Opening cash in hand today (₹)","0");
+  if(open===null) return;
+  S.entries=[]; S.days={}; S.sample=false; S.openingSeed=n(open);
+  var d=todayISO();
+  S.days[d]={date:d,opening:S.openingSeed,fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+  persist(); renderAll();
+}
+
+/* ---------------- voucher lines ---------------- */
+/* A voucher is a list of lines, like the paper form's numbered rows.
+   Older saved entries hold a single particulars/amount pair; itemsOf()
+   presents those as a one-line voucher so nothing needs migrating. */
+function itemsOf(e){
+  if(e && e.items && e.items.length) return e.items;
+  return [{particulars:(e&&e.particulars)||"",amount:(e&&e.amount)||0}];
+}
+function addItemRow(vals){
+  var box=$("#f-items"), row=el("div","itemrow");
+  var p=el("input"); p.type="text"; p.setAttribute("list","particularsList");
+  p.placeholder="e.g. Gas cylinder refilling 1 pcs"; p.className="i-part";
+  p.autocomplete="off"; p.value=(vals&&vals.particulars)||"";
+  var a=el("input"); a.type="number"; a.min="0"; a.step="1"; a.className="i-amt num";
+  a.placeholder="0"; a.value=(vals&&vals.amount)||"";
+  var x=el("button","i-del"); x.type="button"; x.textContent="\u00d7"; x.title="Remove this line";
+  x.addEventListener("click",function(){
+    row.remove();
+    if(!$$(".itemrow",box).length) addItemRow();
+    renumberItems(); renderSlip();
+  });
+  [p,a].forEach(function(f){ f.addEventListener("input",function(){ renderSlip(); }); });
+  row.appendChild(el("span","i-sn",""));
+  row.appendChild(p); row.appendChild(a); row.appendChild(x);
+  box.appendChild(row);
+  renumberItems();
+  return row;
+}
+function renumberItems(){
+  $$("#f-items .itemrow").forEach(function(r,i){ $(".i-sn",r).textContent=(i+1)+"."; });
+}
+function readItems(){
+  return $$("#f-items .itemrow").map(function(r){
+    return {particulars:$(".i-part",r).value.trim(), amount:n($(".i-amt",r).value)};
+  }).filter(function(i){ return i.particulars || i.amount; });
+}
+function setItems(list){
+  $("#f-items").innerHTML="";
+  (list&&list.length?list:[{particulars:"",amount:""}]).forEach(addItemRow);
+}
+
+/* ---------------- chips & roster ---------------- */
+function pressed(sel){ var c=$(sel+' .chip[aria-pressed="true"]'); return c?c.dataset.val:""; }
+function buildCatChips(){
+  var box=$("#f-cat"); box.innerHTML="";
+  CATS.forEach(function(c,i){
+    var b=el("button","chip",c); b.type="button"; b.dataset.val=c;
+    b.setAttribute("aria-pressed",String(i===0));
+    b.addEventListener("click",function(){
+      $$(".chip",box).forEach(function(o){o.setAttribute("aria-pressed",String(o===b));});
+      buildHeadChips(c);
+      suggestAccount(c);
+      applySigRules(c);
+      renderSlip();
+    });
+    box.appendChild(b);
+  });
+}
+/* Contingency is offered for STL only; any other unit falls back to a base head. */
+function buildHeadChips(cat){
+  var box=$("#f-head"), keep=pressed("#f-head"), opts=headsFor(cat);
+  box.innerHTML="";
+  $("#f-headwrap").hidden=!opts.length;
+  if(!opts.length) return;                     /* no chips pressed => head stays "" */
+  if(opts.indexOf(keep)<0) keep=opts[0];
+  opts.forEach(function(h){
+    var b=el("button","chip",h); b.type="button"; b.dataset.val=h;
+    b.setAttribute("aria-pressed",String(h===keep));
+    b.addEventListener("click",function(){
+      $$(".chip",box).forEach(function(o){o.setAttribute("aria-pressed",String(o===b));});
+      renderSlip();
+    });
+    box.appendChild(b);
+  });
+}
+/* A contractor voucher is signed by the accountant and the contractor only —
+   there is no "Passed by" block on the printed construction slip. */
+function applySigRules(cat){
+  var two=(cat==="Construction");
+  $("#f-apprwrap").hidden=two;
+  $("#f-sigrow").classList.toggle("one",two);
+}
+function suggestAccount(cat){
+  var f=$("#f-acct"), was=f.value.trim();
+  var isDefault=!was||Object.keys(DEFAULT_ACCOUNTS).some(function(k){return DEFAULT_ACCOUNTS[k]===was;});
+  if(isDefault) f.value=DEFAULT_ACCOUNTS[cat]||"";
+  f.placeholder=cat==="Construction"?"e.g. Science Block Floor-3 Construction A/c":(DEFAULT_ACCOUNTS[cat]||"");
+}
+function fillPeople(){
+  [["#f-by",S.people],["#f-appr",S.approvers],["#f-payee",S.payees]].forEach(function(p){
+    var sel=$(p[0]), was=sel.value;
+    sel.innerHTML="";
+    p[1].forEach(function(nm){ sel.appendChild(new Option(nm,nm)); });
+    if(p[1].indexOf(was)>=0) sel.value=was;
+  });
+}
+/* Adds to the saved roster so the name is picked from a list next time —
+   matching case-insensitively so "anand" never becomes a second Anand. */
+function addPerson(key,sel,ask){
+  var nm=prompt(ask,"");
+  if(nm===null) return;
+  nm=nm.trim(); if(!nm) return;
+  var exists=S[key].filter(function(x){return x.toLowerCase()===nm.toLowerCase();})[0];
+  if(exists) nm=exists; else { S[key].push(nm); S[key].sort(); }
+  fillPeople(); $(sel).value=nm; persist(); renderSlip();
+  if(Storage.addMaster){
+    var dt={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
+    if(dt) Storage.addMaster(dt,nm).catch(function(){ /* already exists: harmless */ });
+  }
+}
+
+/* Renames or removes one roster name.
+   A rename rewrites the saved vouchers too, so a corrected spelling does not
+   split one person across two rows of the monthly report. A removal is refused
+   while any voucher still names the person: dropping it would leave those
+   vouchers pointing at a name the roster no longer knows. Rename instead. */
+function managePerson(key,sel,field){
+  var cur=$(sel).value;
+  if(!cur){ alert("Pick a name in the list first."); return; }
+  var used=S.entries.filter(function(e){return e[field]===cur;}).length;
+  var note=used?"\n\nNamed on "+used+" saved voucher"+(used===1?"":"s")+".":"";
+  var nm=prompt("Rename \u201c"+cur+"\u201d \u2014 or clear the box to remove it."+note,cur);
+  if(nm===null) return;
+  nm=nm.trim();
+
+  if(!nm){
+    if(used){
+      alert("\u201c"+cur+"\u201d stays: "+used+" voucher"+(used===1?"":"s")+" still name"+
+            (used===1?"s":"")+" it. Rename it instead, and the vouchers follow.");
+      return;
+    }
+    if(!confirm("Remove \u201c"+cur+"\u201d from the list?")) return;
+    S[key]=S[key].filter(function(x){return x!==cur;});
+    fillPeople(); persist(); renderSlip();
+    if(Storage.removeMaster){
+      var dtd={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
+      if(dtd) Storage.removeMaster(dtd,cur).catch(function(){ /* server keeps it: harmless */ });
+    }
+    return;
+  }
+
+  if(nm===cur) return;
+  var clash=S[key].filter(function(x){return x.toLowerCase()===nm.toLowerCase()&&x!==cur;})[0];
+  if(clash){ alert("\u201c"+clash+"\u201d is already on the list."); return; }
+
+  S[key]=S[key].map(function(x){return x===cur?nm:x;}); S[key].sort();
+  var moved=0;
+  S.entries.forEach(function(e){ if(e[field]===cur){ e[field]=nm; moved++; } });
+  fillPeople(); $(sel).value=nm; persist(); renderAll();
+  if(Storage.renameMaster){
+    var dtr={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
+    if(dtr) Storage.renameMaster(dtr,cur,nm).catch(function(){ /* server keeps it: harmless */ });
+  }
+  if(moved) alert("Renamed, and carried onto "+moved+" saved voucher"+(moved===1?"":"s")+".");
+}
+
+function showTab(name){
+  $$(".tab").forEach(function(o){o.setAttribute("aria-selected",String(o.dataset.v===name));});
+  $$(".view").forEach(function(v){v.hidden=(v.id!=="v-"+name);});
+  if(name==="reports") renderReports();
+  if(name==="register") renderRegister();
+}
+
+/* ---------------- document lifecycle ----------------
+   A voucher is a Draft while it can still be corrected, Submitted once it is
+   part of the books, and Cancelled when it has been withdrawn. Only Submitted
+   vouchers reach the daybook, the monthly reports and the Tally export, so an
+   unfinished entry can sit in the register without moving the cash position.
+   Vouchers saved before the lifecycle existed carry no status and are read as
+   Submitted, so books that already balance keep their figures. */
+var editingId=null;      /* draft open in the form, if any */
+var amendBase=null;      /* voucher no this draft is an amendment of */
+function statusOf(e){ return e.status||"Submitted"; }
+/* Which purse paid. Vouchers written before this field existed came out of the
+   cash box, which is what "box" means, so old daybooks keep their figures. */
+function srcOf(e){ return e.src||"box"; }
+function isPosted(e){ return statusOf(e)==="Submitted"; }
+function posted(list){ return list.filter(isPosted); }
+function entryById(id){ return S.entries.filter(function(x){return x.id===id;})[0]; }
+function say(msg){ var b=$("#v-status"); if(b) b.textContent=msg||""; }
+
+/* Frappe's numbering for a corrected document: the original series number with
+   "-1", "-2" ... appended, so the trail shows which voucher it replaces. */
+function amendNo(base){
+  var root=String(base).replace(/-\d+$/,"");
+  var re=new RegExp("^"+root.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"-(\\d+)$"), mx=0;
+  S.entries.forEach(function(e){ var m=re.exec(e.no||""); if(m) mx=Math.max(mx,Number(m[1])); });
+  return root+"-"+(mx+1);
+}
+function press(sel,val){
+  if(!val) return;
+  var c=$$(".chip",$(sel)).filter(function(b){return b.dataset.val===val;})[0];
+  if(c) c.click();
+}
+/* Puts a name on its roster if the voucher uses one the list has lost. */
+function ensureName(key,sel,nm){
+  if(!nm) return;
+  if(S[key].indexOf(nm)<0){ S[key].push(nm); S[key].sort(); fillPeople(); }
+  $(sel).value=nm;
+}
+function loadIntoForm(e){
+  press("#f-cat",e.category);
+  press("#f-head",e.head);
+  $("#f-date").value=e.date||todayISO();
+  $("#f-mode").value=e.mode||"cash";
+  $("#f-src").value=srcOf(e);
+  $("#f-acct").value=e.account||"";
+  $("#f-addr").value=e.address||"";
+  setItems(itemsOf(e).map(function(i){return {particulars:i.particulars,amount:i.amount};}));
+  fillPeople();
+  ensureName("payees","#f-payee",e.payee);
+  ensureName("people","#f-by",e.by);
+  ensureName("approvers","#f-appr",e.approved);
+  renderSlip(); syncFormMode();
+  $("#vform").scrollIntoView({behavior:"smooth",block:"start"});
+}
+/* Submit only exists while a saved draft is open: you cannot submit a voucher
+   that has not been written down yet. */
+function syncFormMode(){
+  var e=editingId?entryById(editingId):null;
+  var draft=!!(e&&statusOf(e)==="Draft");
+  $("#v-submit").hidden=!draft;
+  $("#v-save").textContent=draft?"Save changes":(amendBase?"Save amended draft":"Save draft");
+}
+function editDraft(id){
+  var e=entryById(id); if(!e) return;
+  if(statusOf(e)!=="Draft"){ alert("Only a draft can be edited."); return; }
+  editingId=id; amendBase=null; showTab("voucher"); loadIntoForm(e);
+  say("Editing draft "+e.no+".");
+}
+function submitEntry(id,asked){
+  var e=entryById(id); if(!e) return;
+  if(statusOf(e)!=="Draft"){ alert("Only a draft can be submitted."); return; }
+  if(!asked&&!confirm("Submit voucher "+e.no+"?\n\nIt enters the daybook and the reports, and can then be "+
+              "corrected only by cancelling and amending it.")) return;
+  e.status="Submitted"; e.submittedAt=Date.now();
+  if(editingId===id){ editingId=null; resetForm(); }
+  persist(); renderAll(); say("Voucher "+e.no+" submitted.");
+  if(Storage.submitVoucher&&e.serverSaved){
+    Storage.submitVoucher(e.no).catch(function(err){
+      e.status="Draft"; persist(); renderAll();
+      alert("The server did not submit this voucher:\n\n"+((err&&err.message)||"unknown error")+
+            "\n\nIt is a draft again.");
+    });
+  }
+}
+function cancelEntry(id){
+  var e=entryById(id); if(!e) return;
+  if(statusOf(e)!=="Submitted"){ alert("Only a submitted voucher can be cancelled."); return; }
+  if(!confirm("Cancel voucher "+e.no+"?\n\nIt comes out of the daybook and the reports but stays in "+
+              "the register marked Cancelled, so the trail is intact. That may be all you need; "+
+              "amend it only if a corrected voucher has to be issued in its place.")) return;
+  e.status="Cancelled"; e.cancelledAt=Date.now();
+  persist(); renderAll(); say("Voucher "+e.no+" cancelled \u2014 out of the reports, still in the register.");
+  if(Storage.cancelVoucher&&e.serverSaved){ Storage.cancelVoucher(e.no).catch(function(){}); }
+}
+/* Opens a copy of a cancelled voucher as a fresh draft under a "-1" number. */
+function amendEntry(id){
+  var e=entryById(id); if(!e) return;
+  if(statusOf(e)!=="Cancelled"){ alert("Cancel the voucher first \u2014 only a cancelled voucher can be amended."); return; }
+  editingId=null; amendBase=e.no; showTab("voucher"); loadIntoForm(e);
+  say("Amending "+e.no+" as "+amendNo(e.no)+" \u2014 correct it, save the draft, then submit.");
+}
+
+/* Hands over a PDF file of the voucher. Printing can reach a PDF too, but only
+   through the print dialog; this is the one click that produces something to
+   attach to a message. */
+function downloadVoucherPdf(d,no){
+  if(!window.RokarPdf){ alert("The PDF writer did not load \u2014 print the voucher instead."); return; }
+  var isBuild=(d.category==="Construction");
+  var blob=RokarPdf.voucher({
+    org:ORG, place:PLACE,
+    account:d.account||"", costHead:(d.category==="STL"&&d.head)?d.head:"",
+    payee:d.payee||"", date:dmy(d.date), address:d.address||"",
+    no:no, mode:(d.mode||"cash").toUpperCase(),
+    lines:(d.items||[]).filter(function(i){return i.particulars||i.amount;})
+            .map(function(i){return {particulars:i.particulars||"",
+                                     amount:i.amount?inr(i.amount):""};}),
+    words:d.amount?words(d.amount).replace(/^Rupees /,"").replace(/ only$/," Rupees Only"):"",
+    total:d.amount?inr(d.amount):"",
+    signatures:isBuild?[[d.by||"","Accountant"],["","Signature of Contractor"]]
+                      :[[d.by||"","Accountant"],[d.approved||"","Passed by"],
+                        ["","Signature of Receiver"]]
+  });
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url; a.download="voucher-"+String(no).replace(/[^\w.-]+/g,"-")+".pdf";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
+}
+function pdfEntry(id){
+  var e=entryById(id); if(!e) return;
+  downloadVoucherPdf({date:e.date,payee:e.payee,items:itemsOf(e),amount:n(e.amount),
+                      category:e.category,head:e.head,account:e.account,address:e.address,
+                      by:e.by,mode:e.mode,approved:e.approved},e.no);
+}
+
+/* ---------------- printing ----------------
+   The voucher goes on A5 landscape and the day sheet on A4 landscape. A
+   stylesheet can only hold one @page size, so the rule is injected just before
+   the print and overrides the default in styles.css by coming later. */
+function setPageSize(spec){
+  var st=$("#pagesize");
+  if(!st){ st=el("style"); st.id="pagesize"; document.head.appendChild(st); }
+  st.textContent="@media print{@page{size:"+spec+";margin:0}}";
+}
+
+/* The day sheet the foundation already uses: NGHS's own wording and order,
+   the cash account and note count down the left, what the money went on and
+   the bank transfers down the right. One A4 landscape page.
+   "T.B." on their sheet is the Teachers' Block, which this app calls
+   Residence. The right-hand itemisation is drawn from the same vouchers as the
+   "Expenses" line on the left, so the two always agree. */
+function printDay(){
+  var dt=$("#d-date").value;
+  if(!dt){ alert("Pick a date first."); return; }
+  var opening=openingFor(dt), exp=cashExpFor(dt);
+  var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
+      oth=n($("#d-oth").value), dep=n($("#d-dep").value), upi=n($("#d-upi").value);
+  var utr=($("#d-utr").value||"").trim();
+  var gross=opening+fee+bus+wdl+oth;
+  var received=fee+bus+oth;                     /* what came over the counter */
+  var closing=gross-exp-dep;
+
+  var box=el("div","daysheet");
+  box.appendChild(el("div","dtitle1",ORG.toUpperCase()));
+  box.appendChild(el("div","dtitle2","DAY BOOK AS ON DATE "+dmy(dt)));
+
+  var cols=el("div","dcols");
+
+  function twoCol(){ return el("table","dt"); }
+  function put(tb,label,val,cls){
+    var tr=el("tr",cls||null);
+    tr.appendChild(el("td",null,label));
+    tr.appendChild(el("td","r",val===null?"":inr(val)));
+    tb.appendChild(tr);
+  }
+  function head(tb,label,right){
+    var tr=el("tr","subhead");
+    tr.appendChild(el("td",null,label));
+    tr.appendChild(el("td","r",right||""));
+    tb.appendChild(tr);
+  }
+
+  /* ---- left: the cash account, then the note count ---- */
+  var left=el("div","dstack");
+  var t1=twoCol(), b1=el("tbody");
+  put(b1,"Opening Balance",opening);
+  put(b1,"School fee in cash",fee);
+  /* The paper sheet leaves these lines blank; print them only when used. */
+  if(bus) put(b1,"Bus fee in cash",bus);
+  if(wdl) put(b1,"Cash withdrawn from bank",wdl);
+  if(oth) put(b1,"Other cash receipts",oth);
+  put(b1,"Gross Total",gross,"grandrow");
+  put(b1,"Expenses",exp);
+  put(b1,"Total Bank (ICICI)",dep);
+  put(b1,"IN UPI Baircode",upi);
+  put(b1,"Total Cash received",received);
+  put(b1,"Closing balance",closing,"grandrow");
+  t1.appendChild(b1);
+  left.appendChild(t1);
+
+  var t3=el("table","dt dn"), h3=el("thead"), hr3=el("tr");
+  ["Currency","Qty","Amount"].forEach(function(h,i){ hr3.appendChild(el("th",i?"r":null,h)); });
+  h3.appendChild(hr3); t3.appendChild(h3);
+  var b3=el("tbody"), counted=0;
+  $$("#d-denoms input").forEach(function(i){
+    var f=Number(i.dataset.face), q=n(i.value);
+    counted+=f*q;
+    var tr=el("tr");
+    tr.appendChild(el("td",null,inr(f)));
+    tr.appendChild(el("td","r",q?String(q):""));
+    tr.appendChild(el("td","r",inr(f*q)));
+    b3.appendChild(tr);
+  });
+  t3.appendChild(b3);
+  var f3=el("tfoot"), fr3=el("tr","grandrow");
+  fr3.appendChild(el("td",null,"TOTAL"));
+  fr3.appendChild(el("td","r",""));
+  fr3.appendChild(el("td","r",inr(counted)));
+  f3.appendChild(fr3);
+  if(counted!==received){
+    var vr=el("tr","memo"), vc=el("td",null,counted>received?"Counted over cash received":"Counted short of cash received");
+    vc.colSpan=2; vr.appendChild(vc);
+    vr.appendChild(el("td","r",(counted>received?"+":"")+inr(counted-received)));
+    f3.appendChild(vr);
+  }
+  t3.appendChild(f3);
+  left.appendChild(t3);
+  cols.appendChild(left);
+
+  /* ---- right: the day's spending by block, then the bank transfers ---- */
+  var t2=twoCol(), b2=el("tbody");
+  var BLOCKS=[["School Expenses","School"],["T.B. Expenses","Residence"],
+              ["STL Expenses","STL"],["Construction Expenses","Construction"]];
+  BLOCKS.forEach(function(pair,bi){
+    var mine=posted(S.entries).filter(function(e){
+      return e.date===dt&&e.category===pair[1]&&e.mode==="cash"&&srcOf(e)==="box";
+    });
+    /* School and T.B. are always on the sheet; the other two only when used. */
+    if(!mine.length&&bi>1) return;
+    head(b2,pair[0]);
+    mine.forEach(function(e){
+      itemsOf(e).forEach(function(it){ put(b2,it.particulars||"",n(it.amount)); });
+    });
+    if(!mine.length) put(b2,"","");
+  });
+  put(b2,"Total",exp,"grandrow");
+  head(b2,"BANK (ICICI)");
+  head(b2,"UTR NO","AMOUNT");
+  if(dep) put(b2,utr||"—",dep); else put(b2,"","");
+  put(b2,"Total",dep,"grandrow");
+  t2.appendChild(b2);
+  cols.appendChild(t2);
+
+  box.appendChild(cols);
+
+  var sg=el("div","sigs");
+  [["","Accountant"],["","Passed by"],["","Verified by"]].forEach(function(pr){
+    var b=el("div","sig");
+    b.appendChild(el("div","nm",pr[0]));
+    b.appendChild(el("div","lb",pr[1]));
+    sg.appendChild(b);
+  });
+  box.appendChild(sg);
+
+  var pa=$("#printarea"); pa.innerHTML=""; pa.appendChild(box);
+  setPageSize("A4 landscape");
+  window.print();
+}
+
+
+/* Prints a saved voucher \u2014 including one amended after it was first issued.
+   The browser's print dialog is also the way to keep a PDF copy: choose
+   "Save as PDF" as the destination. */
+function printEntry(id){
+  var e=entryById(id); if(!e) return;
+  var d={date:e.date,payee:e.payee,items:itemsOf(e),amount:n(e.amount),
+         category:e.category,head:e.head,account:e.account,address:e.address,
+         by:e.by,mode:e.mode,approved:e.approved};
+  var box=el("div","slip");
+  fillSlip(box,d,e.no);
+  var pa=$("#printarea"); pa.innerHTML=""; pa.appendChild(box);
+  setPageSize("A5 landscape");
+  window.print();
+}
+
+/* ---------------- voucher ---------------- */
+function nextNo(){
+  var mx=0;
+  /* a trailing "-1" marks an amendment; the series number is what precedes it */
+  S.entries.forEach(function(e){ var m=/(\d+)(?:-\d+)?$/.exec(e.no||""); if(m) mx=Math.max(mx,Number(m[1])); });
+  return "NGHS/"+FYCODE+"/"+String(mx+1).padStart(4,"0");
+}
+function formData(){
+  var items=readItems();
+  return {date:$("#f-date").value,payee:$("#f-payee").value,
+          items:items,
+          particulars:items.map(function(i){return i.particulars;}).filter(Boolean).join("; "),
+          amount:items.reduce(function(a,i){return a+n(i.amount);},0),
+          category:pressed("#f-cat"),head:pressed("#f-head"),
+          account:$("#f-acct").value.trim(),address:$("#f-addr").value.trim(),
+          by:$("#f-by").value,mode:$("#f-mode").value,src:$("#f-src").value,
+          approved:(pressed("#f-cat")==="Construction")?"":$("#f-appr").value};
+}
+/* Lays out the same form as the printed NGHS voucher book:
+   masthead, Debited A/c / Paid to / Date / Address, a ruled
+   S.NO.-Particulars-Amount table, Rupees in Word + Total, three signatures. */
+function renderSlip(){
+  var d=formData(), cur=editingId?entryById(editingId):null;
+  var no=cur?cur.no:(amendBase?amendNo(amendBase):nextNo());
+  $("#next-no").textContent=(cur?"Draft: ":amendBase?"Amending as: ":"Next: ")+no;
+  $("#f-total").textContent=inr(d.amount);
+  $("#f-words").textContent=d.amount?words(d.amount):"\u2014";
+  var s=$("#slip"); s.innerHTML="";
+  fillSlip(s,d,no);
+}
+/* Draws one voucher into `s`. Used for the live preview and for printing a
+   voucher straight out of the register, so both come out identical. */
+function fillSlip(s,d,no){
+  var mh=el("div","mh");
+  mh.appendChild(el("div","nm",ORG));
+  mh.appendChild(el("div","pl",PLACE));
+  s.appendChild(mh);
+
+  function fieldRow(pairs){
+    var r=el("div","fr");
+    pairs.forEach(function(p){
+      r.appendChild(el("span","fl",p[0]));
+      r.appendChild(el("span","fv"+(p[2]?" "+p[2]:""),p[1]||""));
+    });
+    return r;
+  }
+  var F=el("div","fields");
+  /* STL is the only unit that carries a cost head, and it has to reach the
+     paper: the head is what the STL spend is audited against. */
+  F.appendChild(d.category==="STL"&&d.head
+    ? fieldRow([["Debited A/c :",d.account,"grow2"],["Cost Head :-",d.head]])
+    : fieldRow([["Debited A/c :",d.account]]));
+  F.appendChild(fieldRow([["Paid to Mr./Mrs./M/s:",d.payee,"grow2"],["Date :-",dmy(d.date)]]));
+  F.appendChild(fieldRow([["Address :-",d.address]]));
+  F.appendChild(fieldRow([["Voucher No. :",no],["Mode :-",d.mode.toUpperCase()]]));
+  s.appendChild(F);
+
+  var t=el("table","vt");
+  var th=el("thead"), htr=el("tr");
+  htr.appendChild(el("th","c-sn","S.NO."));
+  htr.appendChild(el("th",null,"Particulars"));
+  htr.appendChild(el("th","c-amt","Amount"));
+  th.appendChild(htr); t.appendChild(th);
+
+  var tb=el("tbody");
+  var lines=d.items.filter(function(i){return i.particulars||i.amount;});
+  lines.forEach(function(it,i){
+    var tr=el("tr");
+    tr.appendChild(el("td","c-sn",(i+1)+"."));
+    tr.appendChild(el("td",null,it.particulars||""));
+    tr.appendChild(el("td","c-amt",it.amount?inr(it.amount):""));
+    tb.appendChild(tr);
+  });
+  for(var b=lines.length;b<4;b++){
+    var blank=el("tr","filler");
+    blank.appendChild(el("td","c-sn")); blank.appendChild(el("td")); blank.appendChild(el("td","c-amt"));
+    tb.appendChild(blank);
+  }
+  t.appendChild(tb);
+
+  var tf=el("tfoot"), wr=el("tr","wordrow");
+  var wc=el("td"); wc.colSpan=2;
+  /* The three parts sit on one line inside an inner div: a td set to
+     display:flex stops being a table cell and drops its colspan. */
+  var wl=el("div","wl");
+  wl.appendChild(el("span",null,"Rupees in Word"));
+  wl.appendChild(el("span","w",d.amount?words(d.amount).replace(/^Rupees /,"").replace(/ only$/," Rupees Only"):""));
+  /* "Total" is pre-printed on the paper book at the right edge of this cell,
+     hard against the Amount column -- so it prints whether or not there is a
+     figure yet. */
+  wl.appendChild(el("span","tl","Total"));
+  wc.appendChild(wl);
+  wr.appendChild(wc);
+  wr.appendChild(el("td","c-amt grand",d.amount?inr(d.amount):""));
+  tf.appendChild(wr); t.appendChild(tf);
+  s.appendChild(t);
+
+  var isBuild=(d.category==="Construction");
+  var blocks=isBuild
+    ? [[d.by,"Accountant"],["","Signature of Contractor"]]
+    : [[d.by,"Accountant"],[d.approved,"Passed by"],["","Signature of Receiver"]];
+  var sg=el("div","sigs"+(isBuild?" two":""));
+  blocks.forEach(function(p){
+    var b=el("div","sig");
+    b.appendChild(el("div","nm",p[0]||""));
+    b.appendChild(el("div","lb",p[1]));
+    sg.appendChild(b);
+  });
+  s.appendChild(sg);
+}
+function addVoucher(ev){
+  ev.preventDefault();
+  var d=formData();
+  if(!d.items.length){ alert("Add at least one line to the voucher."); return; }
+  var bad=0;
+  d.items.forEach(function(i,ix){ if(!i.particulars||!(n(i.amount)>0)) bad=bad||ix+1; });
+  if(bad){ alert("Line "+bad+" needs both a description and an amount above zero."); return; }
+  if(!d.payee){ alert("Choose who was paid."); return; }
+  if(!d.account){ alert("Enter the account to debit \u2014 it prints on the voucher."); $("#f-acct").focus(); return; }
+  if(d.category==="STL"&&!d.head){ alert("Pick a cost head \u2014 STL vouchers need one."); return; }
+  /* Save writes a Draft. Nothing reaches the daybook or the reports until it
+     is submitted, so a half-checked voucher can wait here safely. */
+  if(editingId){
+    var prev=entryById(editingId);
+    if(!prev){ alert("That draft is no longer in the register."); editingId=null; syncFormMode(); return; }
+    if(statusOf(prev)!=="Draft"){ alert("Only a draft can be edited \u2014 amend the voucher instead."); return; }
+    d.id=prev.id; d.no=prev.no; d.ts=prev.ts; d.serverSaved=prev.serverSaved;
+    d.status="Draft"; d.amended_from=prev.amended_from||null;
+    S.entries=S.entries.map(function(x){return x.id===prev.id?d:x;});
+  } else {
+    d.id=uid(); d.no=amendBase?amendNo(amendBase):nextNo(); d.ts=Date.now();
+    d.status="Draft"; d.amended_from=amendBase||null;
+    S.entries.push(d);
+  }
+  amendBase=null; editingId=d.id;
+  if(d.account && S.accounts.indexOf(d.account)<0) S.accounts.push(d.account);
+  d.items.forEach(function(it){
+    if(it.particulars && S.particulars.indexOf(it.particulars)<0) S.particulars.unshift(it.particulars);
+  });
+  S.particulars=S.particulars.slice(0,400);     /* keep the suggestion list bounded */
+  if(!S.days[d.date]) S.days[d.date]={date:d.date,opening:openingFor(d.date),fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+  /* The draft stays in the form, so printing it or submitting it is the next
+     click rather than a hunt through the register. */
+  persist(); renderAll(); syncFormMode();
+  say("Saved as draft "+d.no+".");
+  /* Asked once, straight after the save, because that is when the clerk still
+     has the paper in hand. Declining leaves a draft, which the register can
+     print, amend or submit later. */
+  function askSubmit(){
+    if(confirm("Saved as draft "+d.no+".\n\nSubmit it now?\n\nSubmitting puts it into the daybook "+
+               "and the monthly reports. Choose Cancel to leave it as a draft \u2014 you can print, "+
+               "amend or submit it from the register.")){
+      submitEntry(d.id,true);
+    }
+  }
+  if(Storage.saveVoucher){
+    /* In Frappe mode wait for the server to name the document, or the submit
+       would be aimed at an id the server never issued. */
+    Storage.saveVoucher(d).then(function(saved){
+      if(editingId===d.id) editingId=saved.name;
+      d.no=saved.name; d.id=saved.name; d.serverSaved=true;   /* adopt Frappe's series number */
+      persist(); renderAll(); syncFormMode(); askSubmit();
+    }).catch(function(err){
+      S.entries=S.entries.filter(function(x){return x.id!==d.id;});   /* do not keep a row the server rejected */
+      persist(); renderAll();
+      alert("The server did not accept this voucher:\n\n"+((err&&err.message)||"unknown error")+
+            "\n\nNothing was saved. Check the entry and try again.");
+    });
+  } else {
+    askSubmit();
+  }
+}
+/* Keeps date, unit, cost head, Debited A/c and both signatories — a clerk
+   entering ten School vouchers in a row only retypes payee, detail, amount. */
+function resetForm(){
+  editingId=null; amendBase=null; say("");
+  var keepDate=$("#f-date").value;
+  $("#f-addr").value=""; setItems([{particulars:"",amount:""}]);
+  $("#f-date").value=keepDate||todayISO();
+  renderSlip(); syncFormMode(); $("#f-payee").focus();
+}
+function delEntry(id){
+  var e=entryById(id); if(!e) return;
+  if(statusOf(e)==="Submitted"){
+    alert("Voucher "+e.no+" is submitted. Cancel it instead \u2014 the register keeps a record of "+
+          "what was withdrawn, which a deletion would destroy.");
+    return;
+  }
+  if(!confirm("Delete "+statusOf(e).toLowerCase()+" voucher "+e.no+"? This removes it for good.")) return;
+  S.entries=S.entries.filter(function(x){return x.id!==id;});
+  if(editingId===id) resetForm();
+  persist(); renderAll();
+}
+
+/* ---------------- daybook ---------------- */
+function cashExpFor(date){
+  /* Only money that actually left the school's cash box. An expense a trustee
+     or member of staff paid themselves — by UPI, or in cash from their own
+     pocket — is still an expense, but it did not touch the box, so it must not
+     move the day's closing balance. It stays in the monthly reports. */
+  return posted(S.entries)
+           .filter(function(e){return e.date===date&&e.mode==="cash"&&srcOf(e)==="box";})
+           .reduce(function(a,e){return a+n(e.amount);},0);
+}
+function dayKeys(){ return Object.keys(S.days).sort(); }
+function closingOf(d){
+  var day=S.days[d]; if(!day) return 0;
+  return n(day.opening)+n(day.fee)+n(day.bus)+n(day.wdl)+n(day.other)-cashExpFor(d)-n(day.deposit);
+}
+function openingFor(date){
+  var prior=dayKeys().filter(function(k){return k<date;});
+  if(!prior.length) return S.openingSeed;
+  return closingOf(prior[prior.length-1]);
+}
+function loadDay(){
+  var d=$("#d-date").value; if(!d) return;
+  var day=S.days[d]||{date:d,opening:openingFor(d),fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+  $("#d-fee").value=n(day.fee); $("#d-bus").value=n(day.bus); $("#d-wdl").value=n(day.wdl);
+  $("#d-oth").value=n(day.other); $("#d-dep").value=n(day.deposit); $("#d-upi").value=n(day.upi);
+  $("#d-utr").value=day.utr||"";
+  $$("#d-denoms input").forEach(function(i){ var q=(day.denoms||{})[i.dataset.face]; i.value=q?q:""; });
+  $("#d-note").textContent=day.closed?"Closed":"Open";
+  calcDay();
+}
+function calcDay(){
+  var d=$("#d-date").value; if(!d) return;
+  var opening=openingFor(d), exp=cashExpFor(d);
+  var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
+      oth=n($("#d-oth").value), dep=n($("#d-dep").value);
+  $("#d-open").textContent=inr(opening);
+  $("#d-exp").textContent=inr(exp);
+  $("#d-close").textContent=inr(opening+fee+bus+wdl+oth-exp-dep);
+  var counted=0;
+  $$("#d-denoms input").forEach(function(i){
+    var f=Number(i.dataset.face), q=n(i.value), v=f*q;
+    counted+=v;
+    var cell=$('#d-denoms td[data-val="'+f+'"]'); if(cell) cell.textContent=inr(v);
+  });
+  $("#d-dtot").textContent=inr(counted);
+  var collected=fee+bus+oth, diff=counted-collected;
+  var bar=$("#d-var");
+  bar.className="varbar "+(diff===0?"ok":"bad");
+  bar.innerHTML="";
+  bar.appendChild(el("span",null, diff===0 ? "Count matches collection of "+rs(collected)
+      : (diff>0?"Counted more than collected":"Counted short of collection")+" — collection "+rs(collected)));
+  bar.appendChild(el("b",null,(diff>0?"+":"")+rs(diff)));
+  var fl=$("#d-depflag"); fl.innerHTML="";
+  if(dep>0){
+    var b=el("div","banner info"); b.style.margin="12px 0 0";
+    b.appendChild(el("b",null,"Deposited to bank"));
+    b.appendChild(el("span",null,rs(dep)+" moved to ICICI on "+dmy(d)+". This is highlighted in the monthly report."));
+    fl.appendChild(b);
+  }
+  renderDayTable();
+}
+function saveDay(){
+  var d=$("#d-date").value; if(!d) return;
+  var dn={};
+  $$("#d-denoms input").forEach(function(i){ var q=n(i.value); if(q) dn[i.dataset.face]=q; });
+  S.days[d]={date:d,opening:openingFor(d),fee:n($("#d-fee").value),bus:n($("#d-bus").value),
+             wdl:n($("#d-wdl").value),other:n($("#d-oth").value),deposit:n($("#d-dep").value),
+             upi:n($("#d-upi").value),utr:$("#d-utr").value.trim(),denoms:dn,closed:true};
+  persist(); $("#d-note").textContent="Closed"; renderAll();
+  if(Storage.saveDay){
+    Storage.saveDay(S.days[d]).catch(function(err){
+      setBanner("info","Day not saved to the server",
+                ((err&&err.message)||"unknown error")+" — it is still held in this browser.");
+    });
+  }
+}
+function countedOf(d){
+  var day=S.days[d]||{}; var t=0;
+  Object.keys(day.denoms||{}).forEach(function(f){ t+=Number(f)*n(day.denoms[f]); });
+  return t;
+}
+function renderDayTable(){
+  var mk=ym($("#d-date").value);
+  var tb=$("#d-table tbody"); tb.innerHTML="";
+  var keys=dayKeys().filter(function(k){return ym(k)===mk;});
+  $("#d-mnote").textContent=monthLabel(mk)+" · "+keys.length+" day"+(keys.length===1?"":"s")+" recorded";
+  if(!keys.length){
+    var tr=el("tr"); var td=el("td","empty","No days recorded in "+monthLabel(mk)+" yet."); td.colSpan=10; tr.appendChild(td); tb.appendChild(tr); return;
+  }
+  keys.forEach(function(k){
+    var day=S.days[k], exp=cashExpFor(k), counted=countedOf(k), coll=n(day.fee)+n(day.bus)+n(day.other);
+    var tr=el("tr");
+    tr.appendChild(el("td",null,dmy(k)));
+    [day.opening,day.fee,day.bus,day.wdl,exp,day.deposit,closingOf(k),day.upi].forEach(function(v,i){
+      var td=el("td","r num",inr(v));
+      if(i===5&&n(v)>0) td.style.color="var(--blue)";
+      if(i===6) td.style.fontWeight="600";
+      tr.appendChild(td);
+    });
+    var td=el("td");
+    if(!Object.keys(day.denoms||{}).length) td.appendChild(el("span","pill p-mute","not counted"));
+    else if(counted===coll) td.appendChild(el("span","pill p-ok","tallies"));
+    else { var p=el("span","pill p-bad",(counted-coll>0?"+":"")+inr(counted-coll)); td.appendChild(p); }
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  });
+}
+
+/* ---------------- register ---------------- */
+function months(){
+  var set={};
+  S.entries.forEach(function(e){ if(e.date) set[ym(e.date)]=1; });
+  Object.keys(S.days).forEach(function(d){ set[ym(d)]=1; });
+  set[ym(todayISO())]=1;
+  return Object.keys(set).sort().reverse();
+}
+function fillMonths(sel){
+  var cur=sel.value, ms=months();
+  sel.innerHTML="";
+  ms.forEach(function(m){ sel.appendChild(new Option(monthLabel(m),m)); });
+  sel.value=(ms.indexOf(cur)>=0)?cur:ms[0];
+}
+function renderRegister(){
+  fillMonths($("#r-month"));
+  var mk=$("#r-month").value, cat=$("#r-cat").value;
+  var rows=S.entries.filter(function(e){return ym(e.date)===mk&&(!cat||e.category===cat);})
+                    .sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:(a.no<b.no?-1:1);});
+  var tb=$("#r-table tbody"), tf=$("#r-table tfoot");
+  tb.innerHTML=""; tf.innerHTML="";
+  var nd=rows.filter(function(e){return statusOf(e)==="Draft";}).length;
+  $("#r-note").textContent=rows.length+" voucher"+(rows.length===1?"":"s")+
+    (nd?" \u00b7 "+nd+" draft"+(nd===1?"":"s")+" not yet in the books":"");
+  if(!rows.length){
+    var tr=el("tr"); var td=el("td","empty","No vouchers for "+monthLabel(mk)+(cat?" under "+cat:"")+"."); td.colSpan=12; tr.appendChild(td); tb.appendChild(tr); return;
+  }
+  var total=0;
+  rows.forEach(function(e){
+    total+=n(e.amount);
+    var tr=el("tr");
+    var vn=el("td","vno",e.no);
+    if(e.amended_from){
+      var af=el("div",null,"amends "+e.amended_from);
+      af.style.cssText="font-size:10.5px;color:var(--muted);margin-top:2px"; vn.appendChild(af);
+    }
+    tr.appendChild(vn);
+    var st=statusOf(e), stc=el("td");
+    stc.appendChild(el("span","pill "+(st==="Draft"?"p-warn":st==="Cancelled"?"p-bad":"p-ok"),st));
+    tr.appendChild(stc);
+    tr.appendChild(el("td",null,dmy(e.date)));
+    tr.appendChild(el("td",null,e.account||"\u2014"));
+    tr.appendChild(el("td",null,e.payee));
+    var its=itemsOf(e);
+    var pt=el("td",null,its[0]?its[0].particulars:"");
+    if(its.length>1){
+      var more=el("div",null,"+"+(its.length-1)+" more line"+(its.length>2?"s":""));
+      more.style.cssText="font-size:11px;color:var(--muted);margin-top:2px"; pt.appendChild(more);
+    }
+    pt.style.maxWidth="280px"; tr.appendChild(pt);
+    var c=el("td"); c.appendChild(el("span","pill p-"+e.category.toLowerCase(),e.category)); tr.appendChild(c);
+    tr.appendChild(el("td",null,e.head||"\u2014"));
+    tr.appendChild(el("td",null,e.by));
+    var md=el("td"); md.appendChild(el("span","pill p-mute",e.mode));
+    if(srcOf(e)==="own"){
+      var op=el("div",null,"own pocket");
+      op.style.cssText="font-size:10.5px;color:var(--muted);margin-top:2px"; md.appendChild(op);
+    }
+    tr.appendChild(md);
+    tr.appendChild(el("td","r num",inr(e.amount)));
+    /* Only the moves the status allows: a draft is edited, submitted or thrown
+       away; a submitted voucher can only be cancelled; a cancelled one amended. */
+    var x=el("td");
+    var acts=st==="Draft"    ? [["print",printEntry],["pdf",pdfEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
+           : st==="Submitted"? [["print",printEntry],["pdf",pdfEntry],["cancel",cancelEntry]]
+           :                   [["print",printEntry],["pdf",pdfEntry],["amend",amendEntry],["delete",delEntry]];
+    acts.forEach(function(a,i){
+      if(i) x.appendChild(document.createTextNode(" \u00b7 "));
+      var b=el("button","lnk",a[0]); b.type="button";
+      b.addEventListener("click",function(){ a[1](e.id); });
+      x.appendChild(b);
+    });
+    tr.appendChild(x);
+    tb.appendChild(tr);
+  });
+  var ftr=el("tr"); var f1=el("td",null,"Total — "+monthLabel(mk)); f1.colSpan=10;
+  ftr.appendChild(f1); ftr.appendChild(el("td","r num",inr(total))); ftr.appendChild(el("td"));
+  tf.appendChild(ftr);
+}
+
+/* ---------------- monthly allocation ----------------
+   The school does not spend fee money: each unit is given a fixed sum for the
+   month and spends against it, exactly as the foundation's expenses sheet is
+   laid out. Balance Amt. is given minus spent, and G.T. is those balances
+   added up. The figures are asked for once per month and then remembered. */
+function givenFor(mk){ return (S.given&&S.given[mk])||{}; }
+function spentByUnit(mk){
+  var out={};
+  CATS.forEach(function(c){out[c]=0;});
+  posted(S.entries).forEach(function(e){
+    if(ym(e.date)===mk&&out.hasOwnProperty(e.category)) out[e.category]+=n(e.amount);
+  });
+  return out;
+}
+/* Asked only for units that actually spent, so a month with School vouchers
+   alone is one question, not four. */
+function askGiven(mk,force){
+  var have=givenFor(mk), spent=spentByUnit(mk), got={}, asked=false;
+  CATS.forEach(function(c){
+    if(!spent[c]&&!have[c]) return;                 /* nothing spent, nothing to fund */
+    if(!force&&have[c]!==undefined){ got[c]=n(have[c]); return; }
+    asked=true;
+    var a=prompt("How much was given for "+c+" in "+monthLabel(mk)+"?\n\n"+
+                 "Spent so far: "+inr(spent[c])+". Leave blank if nothing was given.",
+                 have[c]!==undefined?String(n(have[c])):"");
+    if(a===null){ got[c]=n(have[c]); return; }      /* cancelled: keep what we had */
+    got[c]=n(a);
+  });
+  if(asked||force){ S.given[mk]=got; persist(); }
+  return S.given[mk]||got;
+}
+function renderGiven(){
+  var mk=$("#p-month").value, given=givenFor(mk), spent=spentByUnit(mk);
+  var T=$("#p-given"); T.innerHTML="";
+  var th=el("thead"), hr=el("tr");
+  ["Unit","Given","Total spent","Balance Amt."].forEach(function(h,i){
+    hr.appendChild(el("th",i?"r":null,h));
+  });
+  th.appendChild(hr); T.appendChild(th);
+  var tb=el("tbody"), anyGiven=false, gt=0, sumGiven=0, sumSpent=0;
+  CATS.forEach(function(c){
+    if(!spent[c]&&given[c]===undefined) return;
+    var g=n(given[c]), bal=g-spent[c];
+    anyGiven=anyGiven||given[c]!==undefined;
+    gt+=bal; sumGiven+=g; sumSpent+=spent[c];
+    var tr=el("tr");
+    var u=el("td"); u.appendChild(el("span","pill p-"+c.toLowerCase(),c)); tr.appendChild(u);
+    tr.appendChild(el("td","r num",given[c]===undefined?"\u2014":inr(g)));
+    tr.appendChild(el("td","r num",inr(spent[c])));
+    var b=el("td","r num",given[c]===undefined?"\u2014":inr(bal));
+    if(given[c]!==undefined&&bal<0) b.style.color="var(--bad)";
+    tr.appendChild(b);
+    tb.appendChild(tr);
+  });
+  if(!tb.childNodes.length){
+    var tr0=el("tr"); var td0=el("td","empty","Nothing spent in "+monthLabel(mk)+".");
+    td0.colSpan=4; tr0.appendChild(td0); tb.appendChild(tr0);
+  }
+  T.appendChild(tb);
+  if(anyGiven){
+    var tf=el("tfoot"), fr=el("tr");
+    fr.appendChild(el("td",null,"G.T"));
+    fr.appendChild(el("td","r num",inr(sumGiven)));
+    fr.appendChild(el("td","r num",inr(sumSpent)));
+    fr.appendChild(el("td","r num",inr(gt)));
+    tf.appendChild(fr); T.appendChild(tf);
+  }
+}
+/* The month in the shape the foundation's sheet uses: a block per unit, each
+   with its own Total and Balance Amt., then G.T. across the blocks. */
+function exportMonth(){
+  var mk=$("#p-month").value;
+  var given=askGiven(mk), spent=spentByUnit(mk);
+  var rows=[[ORG],["MONTHLY EXPENSES \u2014 "+monthLabel(mk).toUpperCase()],[]];
+  var gt=0, anyGiven=false;
+  CATS.forEach(function(c){
+    var mine=posted(S.entries).filter(function(e){return ym(e.date)===mk&&e.category===c;})
+               .sort(function(a,b){return a.date<b.date?-1:1;});
+    if(!mine.length&&given[c]===undefined) return;
+    rows.push([c+" Expenses","","","","Given",given[c]===undefined?"":n(given[c])]);
+    rows.push(["Sl.No.","Date","Particular","Amount","Exp By","Voucher No"]);
+    var sl=0;
+    mine.forEach(function(e){
+      itemsOf(e).forEach(function(it){
+        rows.push([++sl,dmy(e.date),it.particulars,it.amount,e.by,e.no]);
+      });
+    });
+    var bal=n(given[c])-spent[c];
+    if(given[c]!==undefined){ anyGiven=true; gt+=bal; }
+    rows.push(["Total","","",spent[c],"Balance Amt.",given[c]===undefined?"":bal]);
+    rows.push([]);
+  });
+  if(anyGiven) rows.push(["","","","","G.T",gt]);
+  offer("monthly-report-"+mk+".csv",csv(rows));
+}
+
+/* ---------------- reports ---------------- */
+function renderReports(){
+  fillMonths($("#p-month"));
+  var mk=$("#p-month").value;
+  var ents=posted(S.entries).filter(function(e){return ym(e.date)===mk;});
+  var dks=dayKeys().filter(function(k){return ym(k)===mk;});
+  var spend=ents.reduce(function(a,e){return a+n(e.amount);},0);
+  var feeCash=dks.reduce(function(a,k){return a+n(S.days[k].fee);},0);
+  var busCash=dks.reduce(function(a,k){return a+n(S.days[k].bus);},0);
+  var upi=dks.reduce(function(a,k){return a+n(S.days[k].upi);},0);
+  var wdl=dks.reduce(function(a,k){return a+n(S.days[k].wdl);},0);
+  var dep=dks.reduce(function(a,k){return a+n(S.days[k].deposit);},0);
+  var closing=dks.length?closingOf(dks[dks.length-1]):S.openingSeed;
+  var opening=dks.length?n(S.days[dks[0]].opening):S.openingSeed;
+
+  var T=$("#p-tiles"); T.innerHTML="";
+  [["Total expense",rs(spend),ents.length+" vouchers","lead"],
+   ["Fee collected — cash",rs(feeCash),dks.length+" days recorded",""],
+   ["Bus fee — cash",rs(busCash),"",""],
+   ["UPI received",rs(upi),"memo — outside cash book",""],
+   ["Withdrawn from bank",rs(wdl),"ICICI",""],
+   ["Deposited to bank",rs(dep),"ICICI",""],
+   ["Closing cash",rs(closing),"opened at "+rs(opening),""]
+  ].forEach(function(t){
+    var d=el("div","tile"+(t[3]?" "+t[3]:""));
+    d.appendChild(el("div","k",t[0])); d.appendChild(el("div","v",t[1]));
+    if(t[2]) d.appendChild(el("div","s",t[2]));
+    T.appendChild(d);
+  });
+
+  /* matrix */
+  var M=$("#p-matrix"); M.innerHTML="";
+  var th=el("thead"), htr=el("tr"); htr.appendChild(el("th",null,"Unit"));
+  HEADS_ALL.forEach(function(h){ htr.appendChild(el("th","r",h)); });
+  htr.appendChild(el("th","r","Total")); th.appendChild(htr); M.appendChild(th);
+  var body=el("tbody"), colTot={}, grand=0;
+  HEADS_ALL.forEach(function(h){colTot[h]=0;});
+  CATS.forEach(function(c){
+    var tr=el("tr"); var lab=el("td"); lab.appendChild(el("span","pill p-"+c.toLowerCase(),c)); tr.appendChild(lab);
+    var mine=ents.filter(function(e){return e.category===c;});
+    var rowTot=mine.reduce(function(a,e){return a+n(e.amount);},0);
+    grand+=rowTot;
+    if(c==="STL"){
+      HEADS_ALL.forEach(function(h){
+        var v=mine.filter(function(e){return e.head===h;}).reduce(function(a,e){return a+n(e.amount);},0);
+        colTot[h]+=v;
+        tr.appendChild(el("td","r num",v?inr(v):"\u2014"));
+      });
+    } else {
+      var na=el("td","r"); na.colSpan=HEADS_ALL.length;
+      na.style.cssText="background:var(--surface-2);color:var(--faint);font-size:11.5px;text-align:center";
+      na.textContent="no cost head \u2014 booked to account";
+      tr.appendChild(na);
+    }
+    var tt=el("td","r num",rowTot?inr(rowTot):"\u2014"); tt.style.fontWeight="600"; tr.appendChild(tt);
+    body.appendChild(tr);
+  });
+  M.appendChild(body);
+  var tf=el("tfoot"), ftr=el("tr"); ftr.appendChild(el("td",null,"Total"));
+  HEADS_ALL.forEach(function(h){ ftr.appendChild(el("td","r num",colTot[h]?inr(colTot[h]):"\u2014")); });
+  ftr.appendChild(el("td","r num",inr(grand))); tf.appendChild(ftr); M.appendChild(tf);
+
+  renderGiven();
+
+  /* people */
+  var P=$("#p-people"); P.innerHTML="";
+  var agg={}; ents.forEach(function(e){ agg[e.by]=(agg[e.by]||0)+n(e.amount); });
+  var names=Object.keys(agg).sort(function(a,b){return agg[b]-agg[a];});
+  var mx=names.length?agg[names[0]]:1;
+  var ph=el("thead"); var phr=el("tr");
+  ["Person","Share","Amount ₹"].forEach(function(h,i){ phr.appendChild(el("th",i===2?"r":"",h)); });
+  ph.appendChild(phr); P.appendChild(ph);
+  var pb=el("tbody");
+  if(!names.length){ var etr=el("tr"); var etd=el("td","empty","No vouchers this month."); etd.colSpan=3; etr.appendChild(etd); pb.appendChild(etr); }
+  names.forEach(function(nm,i){
+    var tr=el("tr"); tr.appendChild(el("td",null,nm));
+    var bc=el("td"); var w=el("div","barcell");
+    var bar=el("div","bar"+(i%3===1?" b2":i%3===2?" b3":""));
+    bar.style.width=Math.max(2,Math.round(agg[nm]/mx*130))+"px";
+    w.appendChild(bar); w.appendChild(el("span","num",Math.round(agg[nm]/grand*100||0)+"%"));
+    $$("span",w)[0].style.cssText="font-size:11.5px;color:var(--muted)";
+    bc.appendChild(w); tr.appendChild(bc);
+    tr.appendChild(el("td","r num",inr(agg[nm])));
+    pb.appendChild(tr);
+  });
+  P.appendChild(pb);
+
+  /* money movement */
+  var MM=$("#p-money"); MM.innerHTML="";
+  var mh=el("thead"), mhr=el("tr"); mhr.appendChild(el("th",null,"Line")); mhr.appendChild(el("th","r","Amount ₹"));
+  mh.appendChild(mhr); MM.appendChild(mh);
+  var mb=el("tbody");
+  [["Opening cash",opening],["Fee cash received",feeCash],["Bus fee cash received",busCash],
+   ["Withdrawn from bank",wdl],["Cash expenses",-ents.filter(function(e){return e.mode==="cash";}).reduce(function(a,e){return a+n(e.amount);},0)],
+   ["Deposited to bank",-dep],["Closing cash",closing]].forEach(function(r,i,arr){
+    var tr=el("tr");
+    tr.appendChild(el("td",null,r[0]));
+    var td=el("td","r num",(r[1]<0?"(":"")+inr(Math.abs(r[1]))+(r[1]<0?")":""));
+    if(r[1]<0) td.style.color="var(--accent-ink)";
+    if(i===arr.length-1||i===0) td.style.fontWeight="600";
+    tr.appendChild(td); mb.appendChild(tr);
+  });
+  MM.appendChild(mb);
+
+  /* collection */
+  var C=$("#p-coll"); C.innerHTML="";
+  var ch=el("thead"), chr=el("tr");
+  ["Date","Fee cash","Bus cash","Total collected","Counted","Variance","UPI","Bank"].forEach(function(h,i){
+    chr.appendChild(el("th",i>0&&i<7?"r":"",h));
+  });
+  ch.appendChild(chr); C.appendChild(ch);
+  var cb=el("tbody");
+  if(!dks.length){ var e2=el("tr"); var t2=el("td","empty","No daybook entries for "+monthLabel(mk)+"."); t2.colSpan=8; e2.appendChild(t2); cb.appendChild(e2); }
+  dks.forEach(function(k){
+    var day=S.days[k], coll=n(day.fee)+n(day.bus)+n(day.other), counted=countedOf(k), diff=counted-coll;
+    var tr=el("tr");
+    tr.appendChild(el("td",null,dmy(k)));
+    tr.appendChild(el("td","r num",inr(day.fee)));
+    tr.appendChild(el("td","r num",inr(day.bus)));
+    var ct=el("td","r num",inr(coll)); ct.style.fontWeight="600"; tr.appendChild(ct);
+    tr.appendChild(el("td","r num",Object.keys(day.denoms||{}).length?inr(counted):"—"));
+    var vt=el("td","r");
+    if(!Object.keys(day.denoms||{}).length) vt.appendChild(el("span","pill p-mute","not counted"));
+    else if(diff===0) vt.appendChild(el("span","pill p-ok","0"));
+    else vt.appendChild(el("span","pill p-bad",(diff>0?"+":"")+inr(diff)));
+    tr.appendChild(vt);
+    var ut=el("td","r num",inr(day.upi)); ut.style.color="var(--blue)"; tr.appendChild(ut);
+    var bt=el("td");
+    if(n(day.wdl)>0) bt.appendChild(el("span","pill p-warn","withdrew "+inr(day.wdl)));
+    if(n(day.deposit)>0) bt.appendChild(el("span","pill p-ok","deposited "+inr(day.deposit)));
+    tr.appendChild(bt);
+    cb.appendChild(tr);
+  });
+  C.appendChild(cb);
+}
+
+/* ---------------- exports ---------------- */
+function offer(filename,text,mime){
+  var blob=new Blob(["\ufeff"+text],{type:(mime||"text/csv")+";charset=utf-8"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
+}
+
+function exportRegister(){
+  var mk=$("#r-month").value;
+  var rows=[["Voucher No","Status","Line","Date","Debited A/c","Paid To","Address","Particulars",
+             "Unit","Cost Head","Spent By","Passed By","Mode","Paid From","Line Amount","Voucher Total"]];
+  S.entries.filter(function(e){return ym(e.date)===mk;}).sort(function(a,b){return a.date<b.date?-1:1;})
+    .forEach(function(e){
+      itemsOf(e).forEach(function(it,i){
+        rows.push([e.no,statusOf(e),i+1,dmy(e.date),e.account||"",e.payee,e.address||"",it.particulars,
+                   e.category,e.head,e.by,e.approved||"",e.mode,
+                   srcOf(e)==="own"?"Own pocket":"Cash box",it.amount,i===0?e.amount:""]);
+      });
+    });
+  offer("register-"+mk+".csv",csv(rows));
+}
+function exportTally(){
+  var mk=$("#r-month").value;
+  var rows=[["Date","Voucher No","Voucher Type","Dr Ledger","Cr Ledger","Cost Centre","Amount","Narration"]];
+  /* the CA gets submitted vouchers only \u2014 a draft is not yet a transaction */
+  posted(S.entries).filter(function(e){return ym(e.date)===mk;}).sort(function(a,b){return a.date<b.date?-1:1;})
+    .forEach(function(e){
+      var cr=e.mode==="cash"?"Cash":(e.mode==="upi"?"ICICI Bank (UPI)":"ICICI Bank");
+      itemsOf(e).forEach(function(it){
+        rows.push([dmy(e.date),e.no,"Payment",e.account||(e.head+" - "+e.category),cr,
+                   e.head?(e.category+" : "+e.head):e.category,it.amount,
+                   it.particulars+" \u2014 paid to "+e.payee+", by "+e.by]);
+      });
+    });
+  offer("tally-"+mk+".csv",csv(rows));
+}
+function exportDaybook(){
+  var mk=ym($("#d-date").value);
+  var rows=[["Date","Opening","Fee Cash","Bus Cash","Other Cash","Bank Withdrawal","Cash Expenses","Bank Deposit","Closing","UPI (memo)","Counted","Variance"]];
+  dayKeys().filter(function(k){return ym(k)===mk;}).forEach(function(k){
+    var d=S.days[k], coll=n(d.fee)+n(d.bus)+n(d.other), counted=countedOf(k);
+    rows.push([dmy(k),d.opening,d.fee,d.bus,d.other,d.wdl,cashExpFor(k),d.deposit,closingOf(k),d.upi,
+               Object.keys(d.denoms||{}).length?counted:"",Object.keys(d.denoms||{}).length?counted-coll:""]);
+  });
+  offer("daybook-"+mk+".csv",csv(rows));
+}
+
+/* ---------------- render ---------------- */
+function renderAll(){
+  renderBanner();
+  fillPeople();
+  function datalist(sel,vals){
+    var box=$(sel); box.innerHTML=""; var seen={};
+    vals.forEach(function(v){ if(v&&!seen[v]){seen[v]=1; box.appendChild(new Option(v));} });
+  }
+  datalist("#addresses",S.entries.map(function(e){return e.address;}));
+  datalist("#particularsList",S.particulars);
+  datalist("#accounts",CATS.map(function(c){return DEFAULT_ACCOUNTS[c];})
+            .concat(S.accounts).concat(S.entries.map(function(e){return e.account;})));
+  var mk=ym(todayISO());
+  var mEnt=posted(S.entries).filter(function(e){return ym(e.date)===mk;});
+  var dks=dayKeys();
+  $("#m-cash").textContent=rs(dks.length?closingOf(dks[dks.length-1]):S.openingSeed);
+  $("#m-vch").textContent=mEnt.length;
+  $("#m-spend").textContent=rs(mEnt.reduce(function(a,e){return a+n(e.amount);},0));
+  renderSlip(); loadDay(); renderRegister();
+  if(!$("#v-reports").hidden) renderReports();
+}
+boot();
+
+/* ---------------- backup & restore ---------------- */
+function backupNow(){
+  var stamp=new Date().toISOString().slice(0,10);
+  offer("rokar-backup-"+stamp+".json",JSON.stringify(payload(),null,2),"application/json");
+  var note=$("#backup-note");
+  note.textContent="Backed up "+dmy(stamp)+". Keep the file somewhere off this computer.";
+  note.style.color="var(--ok)";
+}
+function restoreFrom(file){
+  var fr=new FileReader();
+  fr.onload=function(){
+    var p;
+    try{ p=JSON.parse(fr.result); }
+    catch(e){ alert("That file isn't a Rokar backup — it could not be read as JSON."); return; }
+    if(!p||!Array.isArray(p.entries)){ alert("That file isn't a Rokar backup — no voucher list inside."); return; }
+    var msg="Replace the books on this computer with the backup?\n\n"+
+            "Backup: "+p.entries.length+" vouchers, "+Object.keys(p.days||{}).length+" daybook days"+
+            (p.savedAt?"\nSaved: "+p.savedAt.slice(0,10):"")+
+            "\n\nOn this computer now: "+S.entries.length+" vouchers, "+Object.keys(S.days).length+" days.";
+    if(!confirm(msg)) return;
+    S.entries=p.entries||[]; S.days=p.days||{};
+    S.sample=!!p.sample; S.openingSeed=n(p.openingSeed);
+    if(p.people&&p.people.length) S.people=p.people;
+    if(p.approvers&&p.approvers.length) S.approvers=p.approvers;
+    if(p.payees&&p.payees.length) S.payees=p.payees;
+    S.accounts=p.accounts||[]; S.particulars=p.particulars||[];
+    persist(); renderAll(); renderReports();
+    var note=$("#backup-note");
+    note.textContent="Restored "+S.entries.length+" vouchers from backup.";
+    note.style.color="var(--ok)";
+  };
+  fr.onerror=function(){ alert("The file could not be opened."); };
+  fr.readAsText(file);
+}

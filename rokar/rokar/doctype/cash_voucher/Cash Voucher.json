@@ -1,0 +1,237 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-09-10 12:00:00",
+ "default_print_format": "Cash Voucher Slip",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "posting_date",
+  "unit",
+  "debited_account",
+  "cb0",
+  "mode",
+  "paid_from",
+  "cost_head",
+  "sb1",
+  "payee",
+  "address",
+  "sb2",
+  "items",
+  "particulars",
+  "amount",
+  "amount_in_words",
+  "sb3",
+  "spent_by",
+  "passed_by",
+  "cb1",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "default": "NGHS/26-27/.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "NGHS/26-27/.####\nNGHS/27-28/.####",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "default": "School",
+   "fieldname": "unit",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Unit",
+   "options": "School\nResidence\nSTL\nConstruction",
+   "reqd": 1
+  },
+  {
+   "fieldname": "debited_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Debited A/c",
+   "options": "Rokar Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb0",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "default": "Cash",
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "Cash\nUPI\nBank / cheque",
+   "reqd": 1
+  },
+  {
+   "fieldname": "paid_from",
+   "fieldtype": "Select",
+   "label": "Paid From",
+   "options": "Cash box\nOwn pocket",
+   "default": "Cash box",
+   "reqd": 1,
+   "in_standard_filter": 1,
+   "description": "Own pocket means a trustee or staff member paid it themselves; the school's cash box is untouched, so the daybook does not count it."
+  },
+  {
+   "depends_on": "eval:doc.unit=='STL'",
+   "description": "Recorded for STL only.",
+   "fieldname": "cost_head",
+   "fieldtype": "Select",
+   "label": "Cost Head",
+   "mandatory_depends_on": "eval:doc.unit=='STL'",
+   "options": "\nProgram Delivery\nBeneficiary Support\nContingency"
+  },
+  {
+   "fieldname": "sb1",
+   "fieldtype": "Section Break",
+   "label": "Payee"
+  },
+  {
+   "fieldname": "payee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Paid to Mr./Mrs./M/s",
+   "options": "Rokar Payee",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "payee.address",
+   "fetch_if_empty": 1,
+   "fieldname": "address",
+   "fieldtype": "Data",
+   "label": "Address"
+  },
+  {
+   "fieldname": "sb2",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Particulars",
+   "options": "Rokar Voucher Item",
+   "reqd": 1
+  },
+  {
+   "description": "Built from the lines above; used in lists and search.",
+   "fieldname": "particulars",
+   "fieldtype": "Small Text",
+   "label": "Summary",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "description": "Sum of the lines above.",
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount_in_words",
+   "fieldtype": "Data",
+   "label": "Rupees in Word",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sb3",
+   "fieldtype": "Section Break",
+   "label": "Signatures"
+  },
+  {
+   "fieldname": "spent_by",
+   "fieldtype": "Link",
+   "label": "Accountant / spent by",
+   "options": "Rokar Person",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.unit!='Construction'",
+   "description": "Construction vouchers are signed by the contractor instead.",
+   "fieldname": "passed_by",
+   "fieldtype": "Link",
+   "label": "Passed by",
+   "options": "Rokar Person"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Cash Voucher",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-10 12:00:00",
+ "modified_by": "Administrator",
+ "module": "Rokar",
+ "name": "Cash Voucher",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Rokar Clerk",
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Rokar Auditor"
+  }
+ ],
+ "search_fields": "posting_date,payee,amount",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "payee",
+ "track_changes": 1
+}

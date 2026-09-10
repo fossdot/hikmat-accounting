@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+
+node_modules/
+.DS_Store
+.playwright-mcp/

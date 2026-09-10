@@ -1,0 +1,68 @@
+{
+ "actions": [],
+ "creation": "2026-09-10 12:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "school_name",
+  "place",
+  "cb0",
+  "opening_cash_balance",
+  "bank_label"
+ ],
+ "fields": [
+  {
+   "default": "Noor Girls High School",
+   "fieldname": "school_name",
+   "fieldtype": "Data",
+   "label": "School name",
+   "reqd": 1
+  },
+  {
+   "default": "Meghwal, Mathiya",
+   "fieldname": "place",
+   "fieldtype": "Data",
+   "label": "Place (printed under the name)"
+  },
+  {
+   "fieldname": "cb0",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "description": "Cash in hand on the day the books started. Used only until the first daybook day is closed.",
+   "fieldname": "opening_cash_balance",
+   "fieldtype": "Currency",
+   "label": "Opening cash balance"
+  },
+  {
+   "default": "ICICI",
+   "fieldname": "bank_label",
+   "fieldtype": "Data",
+   "label": "Bank label"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-10 12:00:00",
+ "modified_by": "Administrator",
+ "module": "Rokar",
+ "name": "Rokar Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

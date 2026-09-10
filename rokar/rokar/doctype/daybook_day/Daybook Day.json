@@ -1,0 +1,218 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:DB-{posting_date}",
+ "creation": "2026-09-10 12:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "posting_date",
+  "opening_balance",
+  "sb0",
+  "fee_cash",
+  "bus_cash",
+  "cb0",
+  "bank_withdrawal",
+  "other_cash",
+  "sb1",
+  "cash_expenses",
+  "bank_deposit",
+  "bank_utr",
+  "cb1",
+  "closing_balance",
+  "upi_received",
+  "sb2",
+  "denominations",
+  "counted_total",
+  "collected_total",
+  "variance",
+  "cb2",
+  "variance_note",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "opening_balance",
+   "fieldtype": "Currency",
+   "label": "Opening balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sb0",
+   "fieldtype": "Section Break",
+   "label": "Receipts"
+  },
+  {
+   "fieldname": "fee_cash",
+   "fieldtype": "Currency",
+   "label": "School fee - cash"
+  },
+  {
+   "fieldname": "bus_cash",
+   "fieldtype": "Currency",
+   "label": "Bus fee - cash"
+  },
+  {
+   "fieldname": "cb0",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "bank_withdrawal",
+   "fieldtype": "Currency",
+   "label": "Cash withdrawn from bank"
+  },
+  {
+   "fieldname": "other_cash",
+   "fieldtype": "Currency",
+   "label": "Other cash receipts"
+  },
+  {
+   "fieldname": "sb1",
+   "fieldtype": "Section Break",
+   "label": "Payments"
+  },
+  {
+   "fieldname": "cash_expenses",
+   "fieldtype": "Currency",
+   "label": "Cash expenses (from vouchers)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bank_deposit",
+   "fieldtype": "Currency",
+   "label": "Deposited to bank"
+  },
+  {
+   "fieldname": "bank_utr",
+   "fieldtype": "Data",
+   "label": "Bank UTR No",
+   "description": "Reference of the transfer, printed under BANK (ICICI) on the day sheet."
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "bold": 1,
+   "fieldname": "closing_balance",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Closing balance",
+   "read_only": 1
+  },
+  {
+   "description": "Shown on reports; deliberately outside the cash balance.",
+   "fieldname": "upi_received",
+   "fieldtype": "Currency",
+   "label": "UPI received (memo only)"
+  },
+  {
+   "fieldname": "sb2",
+   "fieldtype": "Section Break",
+   "label": "Currency count of today's collection"
+  },
+  {
+   "fieldname": "denominations",
+   "fieldtype": "Table",
+   "label": "Denominations",
+   "options": "Rokar Denomination"
+  },
+  {
+   "fieldname": "counted_total",
+   "fieldtype": "Currency",
+   "label": "Counted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "collected_total",
+   "fieldtype": "Currency",
+   "label": "Collected",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "variance",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Variance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "description": "A count that does not match the collection must be explained.",
+   "fieldname": "variance_note",
+   "fieldtype": "Small Text",
+   "label": "Reason for variance",
+   "mandatory_depends_on": "eval:doc.variance && doc.variance!=0"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Daybook Day",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-10 12:00:00",
+ "modified_by": "Administrator",
+ "module": "Rokar",
+ "name": "Daybook Day",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Rokar Clerk",
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Rokar Auditor"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
