@@ -35,9 +35,10 @@ it, and reports `Balance Amt. = given − spent` per unit with a grand total.
 
 ### Installation
 
-**Frappe Cloud.** Add this repository as a custom app on a **Version 15** bench,
-then install it on your site. The app targets `frappe~=15.0.0`; Version 16 and
-develop are untested.
+**Frappe Cloud.** Add this repository as a custom app on the bench, then install
+it on your site. `[tool.bench.frappe-dependencies]` in `pyproject.toml` declares
+`frappe >=15.0.0,<17.0.0`, so it installs on a Version 15 or Version 16 bench.
+It was developed on 15.
 
 **A local bench:**
 
