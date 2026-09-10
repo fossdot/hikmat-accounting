@@ -21,7 +21,7 @@
     <div class="crest">रो</div>
     <div>
       <h1>Rokar — Cash Book &amp; Voucher Register</h1>
-      <div class="sub">Noor Girls High School · Hikmat Foundation · FY 2026&#8209;27</div>
+      <div class="sub" id="mast-sub"></div>
     </div>
     <div class="mast-spacer"></div>
     <div class="cashbox">
@@ -79,8 +79,8 @@
             <div class="chipset" id="f-head"></div>
             <div class="headnote">Cost heads are recorded for STL only.</div></div>
           <div class="row2" id="f-sigrow">
-            <div class="field"><label for="f-by">Spent by <span class="hi">खर्च करने वाला</span></label>
-              <div class="withadd"><select id="f-by"></select><button type="button" class="addbtn" id="add-by" title="Add a new person">+</button><button type="button" class="addbtn" id="edit-by" title="Rename or remove the selected person">&#9998;</button></div></div>
+            <div class="field"><label for="f-by">Accountant <span class="hi">लेखाकार</span></label>
+              <div class="withadd"><select id="f-by"></select><button type="button" class="addbtn" id="add-by" title="Add an accountant">+</button><button type="button" class="addbtn" id="edit-by" title="Rename or remove the selected accountant">&#9998;</button></div></div>
             <div class="field" id="f-apprwrap"><label for="f-appr">Passed by <span class="hi">स्वीकृतकर्ता</span></label>
               <div class="withadd"><select id="f-appr"></select><button type="button" class="addbtn" id="add-appr" title="Add a new approver">+</button><button type="button" class="addbtn" id="edit-appr" title="Rename or remove the selected approver">&#9998;</button></div></div>
           </div>
@@ -116,7 +116,7 @@
         <span class="note" id="r-note"></span>
       </header>
       <div class="tw"><table id="r-table">
-        <thead><tr><th>Voucher</th><th>Status</th><th>Date</th><th>Debited A/c</th><th>Paid to</th><th>Particulars</th><th>Unit</th><th>Cost head</th><th>Spent by</th><th>Mode</th><th class="r">Amount ₹</th><th></th></tr></thead>
+        <thead><tr><th>Voucher</th><th>Status</th><th>Date</th><th>Debited A/c</th><th>Paid to</th><th>Particulars</th><th>Unit</th><th>Cost head</th><th>Accountant</th><th>Mode</th><th class="r">Amount ₹</th><th></th></tr></thead>
         <tbody></tbody><tfoot></tfoot>
       </table></div>
       <div class="pad" style="border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -238,11 +238,29 @@
   <p><b>Scope.</b> A capture and reporting tool, not a double-entry ledger. Vouchers and daybook lines export as CSV for the CA to bring into Tally; it does not post journal entries itself.</p>
 </div>
 
+<div class="ask" id="ask" hidden>
+  <div class="ask-card" role="dialog" aria-modal="true" aria-labelledby="ask-title">
+    <h3 id="ask-title"></h3>
+    <p class="ask-hi" id="ask-hi"></p>
+    <p class="ask-note" id="ask-note"></p>
+    <p class="ask-note ask-hi" id="ask-note-hi"></p>
+    <input type="text" id="ask-input" hidden>
+    <div class="btnrow ask-btns">
+      <button class="btn ghost" type="button" id="ask-no"></button>
+      <button class="btn" type="button" id="ask-yes"></button>
+    </div>
+  </div>
+</div>
 <div id="printarea"></div>
 {% endblock %}
 
 {%- block script -%}
 <script>window.__ROKAR_USER__ = {{ frappe.session.user | tojson }};</script>
+<script>
+  /* Rokar Settings drives the masthead, so a second school needs no code change. */
+  window.__ROKAR_ORG__ = {{ school_name | tojson }};
+  window.__ROKAR_PLACE__ = {{ place | tojson }};
+</script>
 <script src="/assets/rokar/storage-frappe.js"></script>
 <script src="/assets/rokar/app.js"></script>
 {%- endblock -%}

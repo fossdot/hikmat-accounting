@@ -15,9 +15,25 @@ var DEFAULT_APPROVERS=["Approver 1","Approver 2","Approver 3","Approver 4"];
 var ROSTER_VERSION=2;   /* bump when the standing roster changes; see applyLoaded */
 var DEFAULT_PAYEES=["Local vegetable market"];   /* generic on purpose */
 var DEFAULT_ACCOUNTS={School:"School EXP",Residence:"Residence EXP",STL:"STL A/c",Construction:"Construction A/c"};
-var ORG="Noor Girls High School";
-var PLACE="Meghwal, Mathiya";
-var FYCODE="26-27";
+/* On a Frappe site these come from Rokar Settings, injected by the page; the
+   standalone build falls back to the school it was written for. */
+var ORG=window.__ROKAR_ORG__||"Noor Girls High School";
+var PLACE=window.__ROKAR_PLACE__||"Meghwal, Mathiya";
+var FOUNDATION=window.__ROKAR_FOUNDATION__||"Hikmat Foundation";
+var SERIES=window.__ROKAR_SERIES__||"NGHS";      /* voucher number prefix */
+
+/* The Indian financial year runs 1 April to 31 March. Every voucher number and
+   every label derives its year from a date, so the series rolls over by itself
+   each April and numbering restarts at 0001 inside the new year. Nothing here
+   is edited annually. */
+function fyStart(iso){
+  var d=String(iso||todayISO());
+  var y=Number(d.slice(0,4)), m=Number(d.slice(5,7));
+  return (m>=4)?y:y-1;
+}
+function yy(v){ return String(v%100).padStart(2,"0"); }
+function fyOf(iso){ var a=fyStart(iso); return yy(a)+"-"+yy(a+1); }
+function fyLabel(iso){ var a=fyStart(iso); return a+"\u2011"+yy(a+1); }
 
 /* ---------------- state ---------------- */
 var S={entries:[],days:{},mode:"local",sample:true,openingSeed:0,
@@ -28,6 +44,58 @@ var S={entries:[],days:{},mode:"local",sample:true,openingSeed:0,
 /* ---------------- helpers ---------------- */
 function $(s,r){return (r||document).querySelector(s);}
 function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));}
+
+/* ---------------- dialogs ----------------
+   Every question the app asks goes through one centred panel, so nothing falls
+   back to the browser's own box docked at the top of the window. The English
+   line leads and the Hindi sits under it in the smaller face the form labels
+   already use.
+
+     ask(o, fn)      a decision   — fn() runs on confirm
+     askText(o, fn)  a value      — fn(text) runs on confirm
+     note(o[, fn])   something to read
+
+   All three return immediately; the work belongs in the callback. */
+var askThen=null;
+function dialogHide(){ $("#ask").hidden=true; askThen=null; }
+function dialogOpen(o,then,kind){
+  if(typeof o==="string") o={title:o};
+  askThen=then||null;
+  $("#ask-title").textContent=o.title||"";
+  [["#ask-hi",o.hindi],["#ask-note",o.note],["#ask-note-hi",o.noteHindi]]
+    .forEach(function(pr){ var n2=$(pr[0]); n2.textContent=pr[1]||""; n2.hidden=!pr[1]; });
+
+  var inp=$("#ask-input");
+  inp.hidden=(kind!=="text");
+  if(kind==="text"){ inp.value=o.value||""; inp.placeholder=o.placeholder||""; }
+
+  var yes=$("#ask-yes");
+  yes.className="btn"+(o.danger?" danger":"");
+  yes.innerHTML="";
+  yes.appendChild(document.createTextNode(o.yes||"OK"));
+  if(o.yesHindi||kind==="note"){
+    yes.appendChild(document.createTextNode(" "));
+    yes.appendChild(el("span","hi",o.yesHindi||"\u0920\u0940\u0915"));
+  }
+  var no=$("#ask-no");
+  no.hidden=(kind==="note");
+  if(!no.hidden){
+    no.innerHTML="";
+    no.appendChild(document.createTextNode(o.no||"Not now"));
+    no.appendChild(document.createTextNode(" "));
+    no.appendChild(el("span","hi",o.noHindi||"\u0905\u092d\u0940 \u0928\u0939\u0940\u0902"));
+  }
+  $("#ask").hidden=false;
+  (kind==="text"?inp:yes).focus();
+}
+function dialogAccept(){
+  var then=askThen, wantsText=!$("#ask-input").hidden, val=$("#ask-input").value;
+  dialogHide();
+  if(then) then(wantsText?val:undefined);
+}
+function ask(o,then){ dialogOpen(o,then,"confirm"); }
+function askText(o,then){ dialogOpen(o,then,"text"); }
+function note(o,then){ dialogOpen(o,then,"note"); }
 function el(t,c,x){var e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;}
 function n(v){v=Number(v); return isFinite(v)?v:0;}
 function inr(v){
@@ -94,7 +162,8 @@ function seed(){
   ];
   var dayOf=[day-2,day-2,day-1,day-1,day,day,day,day-1,day];
   S.entries=E.map(function(r,i){
-    return {id:uid(),no:"NGHS/"+FYCODE+"/"+String(i+1).padStart(4,"0"),date:dd(dayOf[i]),
+    var dt=dd(dayOf[i]);
+    return {id:uid(),no:SERIES+"/"+fyOf(dt)+"/"+String(i+1).padStart(4,"0"),date:dt,
             account:r[0],payee:r[1],address:r[2],
             items:[{particulars:r[3],amount:r[4]}],particulars:r[3],amount:r[4],
             category:r[5],head:(r[5]==="STL"?r[6]:""),by:r[7],mode:r[8],approved:"Approver 1",sample:true,ts:Date.now()+i};
@@ -126,7 +195,7 @@ function payload(){return {v:1,rosterVersion:ROSTER_VERSION,savedAt:new Date().t
                            entries:S.entries,days:S.days,sample:S.sample,openingSeed:S.openingSeed,
                            people:S.people,approvers:S.approvers,payees:S.payees,
                            accounts:S.accounts,particulars:S.particulars,given:S.given};}
-function roster(){return {sample:S.sample,openingSeed:S.openingSeed,org:ORG,fy:FYCODE,
+function roster(){return {sample:S.sample,openingSeed:S.openingSeed,org:ORG,fy:fyOf(),
                           people:S.people,approvers:S.approvers,accounts:S.accounts};}
 function saveLocal(){
   var r=Storage.save(payload());
@@ -196,9 +265,9 @@ function buildStatic(){
   $$(".tab").forEach(function(t){
     t.addEventListener("click",function(){ showTab(t.dataset.v); });
   });
-  $("#add-by").addEventListener("click",function(){ addPerson("people","#f-by","Name of the person who spent the cash"); });
-  $("#add-appr").addEventListener("click",function(){ addPerson("approvers","#f-appr","Name of the person who passes the voucher"); });
-  $("#add-payee").addEventListener("click",function(){ addPerson("payees","#f-payee","Name of the vendor, contractor or person being paid"); });
+  $("#add-by").addEventListener("click",function(){ addPerson("people","#f-by","Name of the accountant","लेखाकार का नाम"); });
+  $("#add-appr").addEventListener("click",function(){ addPerson("approvers","#f-appr","Name of the person who passes the voucher","वाउचर पास करने वाले का नाम"); });
+  $("#add-payee").addEventListener("click",function(){ addPerson("payees","#f-payee","Name of the vendor, contractor or person paid","जिसे भुगतान हुआ, उसका नाम"); });
   $("#edit-by").addEventListener("click",function(){ managePerson("people","#f-by","by"); });
   $("#edit-appr").addEventListener("click",function(){ managePerson("approvers","#f-appr","approved"); });
   $("#edit-payee").addEventListener("click",function(){ managePerson("payees","#f-payee","payee"); });
@@ -225,12 +294,22 @@ function buildStatic(){
   $("#x-tally").addEventListener("click",exportTally);
   $("#x-month").addEventListener("click",exportMonth);
   $("#p-given-edit").addEventListener("click",function(){
-    askGiven($("#p-month").value,true); renderReports();
+    askGiven($("#p-month").value,true,function(){ renderReports(); });
   });
   $("#x-daybook").addEventListener("click",exportDaybook);
   $("#x-backup").addEventListener("click",backupNow);
   $("#x-restore").addEventListener("click",function(){ $("#f-restore").click(); });
   $("#f-restore").addEventListener("change",function(){ if(this.files[0]) restoreFrom(this.files[0]); this.value=""; });
+
+  $("#ask-yes").addEventListener("click",dialogAccept);
+  $("#ask-no").addEventListener("click",dialogHide);
+  /* clicking the backdrop, never the panel itself, dismisses */
+  $("#ask").addEventListener("click",function(ev){ if(ev.target===$("#ask")) dialogHide(); });
+  document.addEventListener("keydown",function(ev){
+    if($("#ask").hidden) return;
+    if(ev.key==="Escape"){ dialogHide(); return; }
+    if(ev.key==="Enter"&&!$("#ask-input").hidden){ ev.preventDefault(); dialogAccept(); }
+  });
 }
 
 /* ---------------- banner ---------------- */
@@ -253,12 +332,16 @@ function renderBanner(){
   }
 }
 function startReal(){
-  var open=prompt("Opening cash in hand today (₹)","0");
-  if(open===null) return;
-  S.entries=[]; S.days={}; S.sample=false; S.openingSeed=n(open);
-  var d=todayISO();
-  S.days[d]={date:d,opening:S.openingSeed,fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
-  persist(); renderAll();
+  askText({title:"Opening cash in hand today (₹)",
+           hindi:"आज हाथ में नकद (₹)",
+           note:"The sample vouchers and daybook days are cleared, and the real books start from this figure.",
+           noteHindi:"नमूना वाउचर और दिन मिट जाएँगे, और असली बही इसी रकम से शुरू होगी।",
+           value:"0",yes:"Start real books",yesHindi:"शुरू करें",danger:true},function(open){
+    S.entries=[]; S.days={}; S.sample=false; S.openingSeed=n(open);
+    var d=todayISO();
+    S.days[d]={date:d,opening:S.openingSeed,fee:0,bus:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+    persist(); renderAll();
+  });
 }
 
 /* ---------------- voucher lines ---------------- */
@@ -359,17 +442,17 @@ function fillPeople(){
 }
 /* Adds to the saved roster so the name is picked from a list next time —
    matching case-insensitively so "anand" never becomes a second Anand. */
-function addPerson(key,sel,ask){
-  var nm=prompt(ask,"");
-  if(nm===null) return;
-  nm=nm.trim(); if(!nm) return;
-  var exists=S[key].filter(function(x){return x.toLowerCase()===nm.toLowerCase();})[0];
-  if(exists) nm=exists; else { S[key].push(nm); S[key].sort(); }
-  fillPeople(); $(sel).value=nm; persist(); renderSlip();
-  if(Storage.addMaster){
-    var dt={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
-    if(dt) Storage.addMaster(dt,nm).catch(function(){ /* already exists: harmless */ });
-  }
+function addPerson(key,sel,label,hindi){
+  askText({title:label,hindi:hindi,yes:"Add",yesHindi:"जोड़ें"},function(raw){
+    var nm=(raw||"").trim(); if(!nm) return;
+    var exists=S[key].filter(function(x){return x.toLowerCase()===nm.toLowerCase();})[0];
+    if(exists) nm=exists; else { S[key].push(nm); S[key].sort(); }
+    fillPeople(); $(sel).value=nm; persist(); renderSlip();
+    if(Storage.addMaster){
+      var dt={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
+      if(dt) Storage.addMaster(dt,nm).catch(function(){ /* already exists: harmless */ });
+    }
+  });
 }
 
 /* Renames or removes one roster name.
@@ -379,32 +462,41 @@ function addPerson(key,sel,ask){
    vouchers pointing at a name the roster no longer knows. Rename instead. */
 function managePerson(key,sel,field){
   var cur=$(sel).value;
-  if(!cur){ alert("Pick a name in the list first."); return; }
+  if(!cur){ note("Pick a name in the list first."); return; }
   var used=S.entries.filter(function(e){return e[field]===cur;}).length;
-  var note=used?"\n\nNamed on "+used+" saved voucher"+(used===1?"":"s")+".":"";
-  var nm=prompt("Rename \u201c"+cur+"\u201d \u2014 or clear the box to remove it."+note,cur);
-  if(nm===null) return;
-  nm=nm.trim();
+  askText({title:"Rename \u201c"+cur+"\u201d",
+           hindi:"नाम बदलें",
+           note:"Clear the box to remove it from the list."+
+                (used?" It is named on "+used+" saved voucher"+(used===1?"":"s")+
+                      ", and a rename carries onto all of them.":""),
+           noteHindi:"सूची से हटाने के लिए बॉक्स खाली कर दें।",
+           value:cur,yes:"Save",yesHindi:"सहेजें"},function(raw){
+  var nm=(raw||"").trim();
 
   if(!nm){
     if(used){
-      alert("\u201c"+cur+"\u201d stays: "+used+" voucher"+(used===1?"":"s")+" still name"+
+      note("\u201c"+cur+"\u201d stays: "+used+" voucher"+(used===1?"":"s")+" still name"+
             (used===1?"s":"")+" it. Rename it instead, and the vouchers follow.");
       return;
     }
-    if(!confirm("Remove \u201c"+cur+"\u201d from the list?")) return;
-    S[key]=S[key].filter(function(x){return x!==cur;});
-    fillPeople(); persist(); renderSlip();
-    if(Storage.removeMaster){
-      var dtd={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
-      if(dtd) Storage.removeMaster(dtd,cur).catch(function(){ /* server keeps it: harmless */ });
-    }
+    ask({title:"Remove \u201c"+cur+"\u201d from the list?",
+         hindi:"\u0907\u0938 \u0928\u093e\u092e \u0915\u094b \u0938\u0942\u091a\u0940 \u0938\u0947 \u0939\u091f\u093e\u090f\u0901?",
+         note:"No voucher names it, so nothing in the books changes.",
+         noteHindi:"\u0915\u093f\u0938\u0940 \u0935\u093e\u0909\u091a\u0930 \u092e\u0947\u0902 \u0928\u0939\u0940\u0902 \u0939\u0948, \u0907\u0938\u0932\u093f\u090f \u092c\u0939\u0940 \u092e\u0947\u0902 \u0915\u094b\u0908 \u092c\u0926\u0932\u093e\u0935 \u0928\u0939\u0940\u0902\u0964",
+         yes:"Remove",yesHindi:"\u0939\u091f\u093e\u090f\u0901",danger:true},function(){
+      S[key]=S[key].filter(function(x){return x!==cur;});
+      fillPeople(); persist(); renderSlip();
+      if(Storage.removeMaster){
+        var dtd={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
+        if(dtd) Storage.removeMaster(dtd,cur).catch(function(){ /* server keeps it: harmless */ });
+      }
+    });
     return;
   }
 
   if(nm===cur) return;
   var clash=S[key].filter(function(x){return x.toLowerCase()===nm.toLowerCase()&&x!==cur;})[0];
-  if(clash){ alert("\u201c"+clash+"\u201d is already on the list."); return; }
+  if(clash){ note("\u201c"+clash+"\u201d is already on the list."); return; }
 
   S[key]=S[key].map(function(x){return x===cur?nm:x;}); S[key].sort();
   var moved=0;
@@ -414,7 +506,8 @@ function managePerson(key,sel,field){
     var dtr={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
     if(dtr) Storage.renameMaster(dtr,cur,nm).catch(function(){ /* server keeps it: harmless */ });
   }
-  if(moved) alert("Renamed, and carried onto "+moved+" saved voucher"+(moved===1?"":"s")+".");
+  if(moved) note("Renamed, and carried onto "+moved+" saved voucher"+(moved===1?"":"s")+".");
+  });
 }
 
 function showTab(name){
@@ -487,42 +580,57 @@ function syncFormMode(){
 }
 function editDraft(id){
   var e=entryById(id); if(!e) return;
-  if(statusOf(e)!=="Draft"){ alert("Only a draft can be edited."); return; }
+  if(statusOf(e)!=="Draft"){ note("Only a draft can be edited."); return; }
   editingId=id; amendBase=null; showTab("voucher"); loadIntoForm(e);
   say("Editing draft "+e.no+".");
 }
 function submitEntry(id,asked){
   var e=entryById(id); if(!e) return;
-  if(statusOf(e)!=="Draft"){ alert("Only a draft can be submitted."); return; }
-  if(!asked&&!confirm("Submit voucher "+e.no+"?\n\nIt enters the daybook and the reports, and can then be "+
-              "corrected only by cancelling and amending it.")) return;
-  e.status="Submitted"; e.submittedAt=Date.now();
-  if(editingId===id){ editingId=null; resetForm(); }
-  persist(); renderAll(); say("Voucher "+e.no+" submitted.");
-  if(Storage.submitVoucher&&e.serverSaved){
-    Storage.submitVoucher(e.no).catch(function(err){
-      e.status="Draft"; persist(); renderAll();
-      alert("The server did not submit this voucher:\n\n"+((err&&err.message)||"unknown error")+
-            "\n\nIt is a draft again.");
-    });
+  if(statusOf(e)!=="Draft"){ note("Only a draft can be submitted."); return; }
+  function go(){
+    e.status="Submitted"; e.submittedAt=Date.now();
+    if(editingId===id){ editingId=null; resetForm(); }
+    persist(); renderAll(); say("Voucher "+e.no+" submitted.");
+    if(Storage.submitVoucher&&e.serverSaved){
+      Storage.submitVoucher(e.no).catch(function(err){
+        e.status="Draft"; persist(); renderAll();
+        note("The server did not submit this voucher: "+((err&&err.message)||"unknown error")+
+             " It is a draft again.");
+      });
+    }
   }
+  if(asked){ go(); return; }                    /* the save already asked */
+  ask({title:"Submit voucher "+e.no+"?",
+       hindi:"यह वाउचर जमा करें?",
+       note:"It enters the daybook and the monthly reports. After this it can be corrected only by cancelling and amending it.",
+       noteHindi:"यह रोकड़ बही और मासिक रिपोर्ट में दर्ज हो जाएगा। इसके बाद सुधार केवल रद्द कर के ही हो सकेगा।",
+       yes:"Submit",yesHindi:"जमा करें"},go);
 }
 function cancelEntry(id){
   var e=entryById(id); if(!e) return;
-  if(statusOf(e)!=="Submitted"){ alert("Only a submitted voucher can be cancelled."); return; }
-  if(!confirm("Cancel voucher "+e.no+"?\n\nIt comes out of the daybook and the reports but stays in "+
-              "the register marked Cancelled, so the trail is intact. That may be all you need; "+
-              "amend it only if a corrected voucher has to be issued in its place.")) return;
-  e.status="Cancelled"; e.cancelledAt=Date.now();
-  persist(); renderAll(); say("Voucher "+e.no+" cancelled \u2014 out of the reports, still in the register.");
-  if(Storage.cancelVoucher&&e.serverSaved){ Storage.cancelVoucher(e.no).catch(function(){}); }
+  if(statusOf(e)!=="Submitted"){ note("Only a submitted voucher can be cancelled."); return; }
+  ask({title:"Cancel voucher "+e.no+"?",
+       hindi:"यह वाउचर रद्द करें?",
+       note:"It leaves the daybook and the reports but stays in the register marked Cancelled, so the trail is intact. Amend it only if a corrected voucher has to be issued in its place.",
+       noteHindi:"यह रोकड़ बही और रिपोर्ट से हट जाएगा, पर बही में ‘रद्द’ के रूप में बना रहेगा। सुधरा वाउचर देना हो तभी सुधार करें।",
+       yes:"Cancel voucher",yesHindi:"रद्द करें",danger:true},function(){
+    e.status="Cancelled"; e.cancelledAt=Date.now();
+    persist(); renderAll(); say("Voucher "+e.no+" cancelled \u2014 out of the reports, still in the register.");
+    if(Storage.cancelVoucher&&e.serverSaved){ Storage.cancelVoucher(e.no).catch(function(){}); }
+  });
 }
 /* Opens a copy of a cancelled voucher as a fresh draft under a "-1" number. */
 function amendEntry(id){
   var e=entryById(id); if(!e) return;
-  if(statusOf(e)!=="Cancelled"){ alert("Cancel the voucher first \u2014 only a cancelled voucher can be amended."); return; }
-  editingId=null; amendBase=e.no; showTab("voucher"); loadIntoForm(e);
-  say("Amending "+e.no+" as "+amendNo(e.no)+" \u2014 correct it, save the draft, then submit.");
+  if(statusOf(e)!=="Cancelled"){ note("Cancel the voucher first \u2014 only a cancelled voucher can be amended."); return; }
+  ask({title:"Amend voucher "+e.no+"?",
+       hindi:"इस वाउचर में सुधार करें?",
+       note:"A corrected voucher "+amendNo(e.no)+" opens as a draft. Save it, then submit it. This one stays cancelled.",
+       noteHindi:"सुधरा हुआ वाउचर "+amendNo(e.no)+" ड्राफ़्ट के रूप में खुलेगा। सहेजें, फिर जमा करें। यह वाउचर रद्द ही रहेगा।",
+       yes:"Amend",yesHindi:"सुधारें"},function(){
+    editingId=null; amendBase=e.no; showTab("voucher"); loadIntoForm(e);
+    say("Amending "+e.no+" as "+amendNo(e.no)+" \u2014 correct it, save the draft, then submit.");
+  });
 }
 
 /* ---------------- printing ----------------
@@ -543,7 +651,7 @@ function setPageSize(spec){
    "Expenses" line on the left, so the two always agree. */
 function printDay(){
   var dt=$("#d-date").value;
-  if(!dt){ alert("Pick a date first."); return; }
+  if(!dt){ note("Pick a date first."); return; }
   var opening=openingFor(dt), exp=cashExpFor(dt);
   var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
       oth=n($("#d-oth").value), dep=n($("#d-dep").value), upi=n($("#d-upi").value);
@@ -676,11 +784,17 @@ function printEntry(id){
 }
 
 /* ---------------- voucher ---------------- */
-function nextNo(){
-  var mx=0;
-  /* a trailing "-1" marks an amendment; the series number is what precedes it */
-  S.entries.forEach(function(e){ var m=/(\d+)(?:-\d+)?$/.exec(e.no||""); if(m) mx=Math.max(mx,Number(m[1])); });
-  return "NGHS/"+FYCODE+"/"+String(mx+1).padStart(4,"0");
+/* The next number in the financial year the voucher itself falls in, so a
+   voucher back-dated into March takes last year's series, not this year's. */
+function nextNo(dateISO){
+  var pre=SERIES+"/"+fyOf(dateISO)+"/", mx=0;
+  S.entries.forEach(function(e){
+    var no=String(e.no||"");
+    if(no.indexOf(pre)!==0) return;              /* another year's series */
+    /* a trailing "-1" marks a correction; the series number precedes it */
+    var m=/(\d+)(?:-\d+)?$/.exec(no); if(m) mx=Math.max(mx,Number(m[1]));
+  });
+  return pre+String(mx+1).padStart(4,"0");
 }
 function formData(){
   var items=readItems();
@@ -698,7 +812,7 @@ function formData(){
    S.NO.-Particulars-Amount table, Rupees in Word + Total, three signatures. */
 function renderSlip(){
   var d=formData(), cur=editingId?entryById(editingId):null;
-  var no=cur?cur.no:(amendBase?amendNo(amendBase):nextNo());
+  var no=cur?cur.no:(amendBase?amendNo(amendBase):nextNo(d.date));
   $("#next-no").textContent=(cur?"Draft: ":amendBase?"Amending as: ":"Next: ")+no;
   $("#f-total").textContent=inr(d.amount);
   $("#f-words").textContent=d.amount?words(d.amount):"\u2014";
@@ -788,19 +902,19 @@ function fillSlip(s,d,no){
 function addVoucher(ev){
   ev.preventDefault();
   var d=formData();
-  if(!d.items.length){ alert("Add at least one line to the voucher."); return; }
+  if(!d.items.length){ note("Add at least one line to the voucher."); return; }
   var bad=0;
   d.items.forEach(function(i,ix){ if(!i.particulars||!(n(i.amount)>0)) bad=bad||ix+1; });
-  if(bad){ alert("Line "+bad+" needs both a description and an amount above zero."); return; }
-  if(!d.payee){ alert("Choose who was paid."); return; }
-  if(!d.account){ alert("Enter the account to debit \u2014 it prints on the voucher."); $("#f-acct").focus(); return; }
-  if(d.category==="STL"&&!d.head){ alert("Pick a cost head \u2014 STL vouchers need one."); return; }
+  if(bad){ note("Line "+bad+" needs both a description and an amount above zero."); return; }
+  if(!d.payee){ note("Choose who was paid."); return; }
+  if(!d.account){ note("Enter the account to debit \u2014 it prints on the voucher."); $("#f-acct").focus(); return; }
+  if(d.category==="STL"&&!d.head){ note("Pick a cost head \u2014 STL vouchers need one."); return; }
   /* Save writes a Draft. Nothing reaches the daybook or the reports until it
      is submitted, so a half-checked voucher can wait here safely. */
   if(editingId){
     var prev=entryById(editingId);
-    if(!prev){ alert("That draft is no longer in the register."); editingId=null; syncFormMode(); return; }
-    if(statusOf(prev)!=="Draft"){ alert("Only a draft can be edited \u2014 amend the voucher instead."); return; }
+    if(!prev){ note("That draft is no longer in the register."); editingId=null; syncFormMode(); return; }
+    if(statusOf(prev)!=="Draft"){ note("Only a draft can be edited \u2014 amend the voucher instead."); return; }
     /* A corrected voucher gets its own number, in the same "-1" series an
        amendment uses. A draft may already have been printed and handed over,
        and two papers must never carry the same number. */
@@ -809,7 +923,7 @@ function addVoucher(ev){
     d.revisedFrom=prev.no;
     S.entries=S.entries.map(function(x){return x.id===prev.id?d:x;});
   } else {
-    d.id=uid(); d.no=amendBase?amendNo(amendBase):nextNo(); d.ts=Date.now();
+    d.id=uid(); d.no=amendBase?amendNo(amendBase):nextNo(d.date); d.ts=Date.now();
     d.status="Draft"; d.amended_from=amendBase||null;
     S.entries.push(d);
   }
@@ -828,11 +942,11 @@ function addVoucher(ev){
      has the paper in hand. Declining leaves a draft, which the register can
      print, amend or submit later. */
   function askSubmit(){
-    if(confirm("Saved as draft "+d.no+".\n\nSubmit it now?\n\nSubmitting puts it into the daybook "+
-               "and the monthly reports. Choose Cancel to leave it as a draft \u2014 you can print, "+
-               "amend or submit it from the register.")){
-      submitEntry(d.id,true);
-    }
+    ask({title:"Saved as draft "+d.no+". Submit it now?",
+         hindi:"ड्राफ़्ट सहेजा गया। अब जमा करें?",
+         note:"Submitting puts it into the daybook and the monthly reports. Choose Not now to print, correct or submit it later from the register.",
+         noteHindi:"जमा करने पर यह रोकड़ बही और मासिक रिपोर्ट में दर्ज हो जाएगा। ‘अभी नहीं’ चुनें तो बही से बाद में छापें, सुधारें या जमा करें।",
+         yes:"Submit",yesHindi:"जमा करें"},function(){ submitEntry(d.id,true); });
   }
   if(Storage.saveVoucher){
     /* In Frappe mode wait for the server to name the document, or the submit
@@ -844,7 +958,7 @@ function addVoucher(ev){
     }).catch(function(err){
       S.entries=S.entries.filter(function(x){return x.id!==d.id;});   /* do not keep a row the server rejected */
       persist(); renderAll();
-      alert("The server did not accept this voucher:\n\n"+((err&&err.message)||"unknown error")+
+      note("The server did not accept this voucher:\n\n"+((err&&err.message)||"unknown error")+
             "\n\nNothing was saved. Check the entry and try again.");
     });
   } else {
@@ -863,14 +977,19 @@ function resetForm(){
 function delEntry(id){
   var e=entryById(id); if(!e) return;
   if(statusOf(e)==="Submitted"){
-    alert("Voucher "+e.no+" is submitted. Cancel it instead \u2014 the register keeps a record of "+
+    note("Voucher "+e.no+" is submitted. Cancel it instead \u2014 the register keeps a record of "+
           "what was withdrawn, which a deletion would destroy.");
     return;
   }
-  if(!confirm("Delete "+statusOf(e).toLowerCase()+" voucher "+e.no+"? This removes it for good.")) return;
-  S.entries=S.entries.filter(function(x){return x.id!==id;});
-  if(editingId===id) resetForm();
-  persist(); renderAll();
+  ask({title:"Delete "+statusOf(e).toLowerCase()+" voucher "+e.no+"?",
+       hindi:"यह वाउचर मिटाएँ?",
+       note:"This removes it for good \u2014 no copy is kept anywhere.",
+       noteHindi:"यह स्थायी रूप से मिट जाएगा — कहीं कोई प्रति नहीं बचेगी।",
+       yes:"Delete",yesHindi:"मिटाएँ",danger:true},function(){
+    S.entries=S.entries.filter(function(x){return x.id!==id;});
+    if(editingId===id) resetForm();
+    persist(); renderAll();
+  });
 }
 
 /* ---------------- daybook ---------------- */
@@ -1019,10 +1138,23 @@ function actionBtn(name,fn,id){
   b.addEventListener("click",function(){ fn(id); });
   return b;
 }
+/* Numbers that a later amendment has replaced. A cancelled voucher stays in
+   the register on its own \u2014 that is the point of cancelling \u2014 but once a
+   corrected voucher has been issued for it, showing both would list the same
+   expense twice. The superseded row stays in the data and in the register
+   export, where an auditor needs the whole chain. */
+function supersededNos(){
+  var out={};
+  S.entries.forEach(function(e){ if(e.amended_from) out[e.amended_from]=1; });
+  return out;
+}
 function renderRegister(){
   fillMonths($("#r-month"));
   var mk=$("#r-month").value, cat=$("#r-cat").value;
-  var rows=S.entries.filter(function(e){return ym(e.date)===mk&&(!cat||e.category===cat);})
+  var gone=supersededNos();
+  var rows=S.entries.filter(function(e){
+                      return ym(e.date)===mk&&(!cat||e.category===cat)&&!gone[e.no];
+                    })
                     .sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:(a.no<b.no?-1:1);});
   var tb=$("#r-table tbody"), tf=$("#r-table tfoot");
   tb.innerHTML=""; tf.innerHTML="";
@@ -1075,7 +1207,7 @@ function renderRegister(){
     var x=el("td","acts");
     var acts=st==="Draft"    ? [["print",printEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
            : st==="Submitted"? [["print",printEntry],["cancel",cancelEntry]]
-           :                   [["print",printEntry],["amend",amendEntry],["delete",delEntry]];
+           :                   [["print",printEntry],["delete",delEntry],["amend",amendEntry]];
     acts.forEach(function(a){ x.appendChild(actionBtn(a[0],a[1],e.id)); });
     tr.appendChild(x);
     tb.appendChild(tr);
@@ -1101,20 +1233,30 @@ function spentByUnit(mk){
 }
 /* Asked only for units that actually spent, so a month with School vouchers
    alone is one question, not four. */
-function askGiven(mk,force){
-  var have=givenFor(mk), spent=spentByUnit(mk), got={}, asked=false;
-  CATS.forEach(function(c){
-    if(!spent[c]&&!have[c]) return;                 /* nothing spent, nothing to fund */
-    if(!force&&have[c]!==undefined){ got[c]=n(have[c]); return; }
-    asked=true;
-    var a=prompt("How much was given for "+c+" in "+monthLabel(mk)+"?\n\n"+
-                 "Spent so far: "+inr(spent[c])+". Leave blank if nothing was given.",
-                 have[c]!==undefined?String(n(have[c])):"");
-    if(a===null){ got[c]=n(have[c]); return; }      /* cancelled: keep what we had */
-    got[c]=n(a);
-  });
-  if(asked||force){ S.given[mk]=got; persist(); }
-  return S.given[mk]||got;
+function askGiven(mk,force,then){
+  var have=givenFor(mk), spent=spentByUnit(mk), got={};
+  /* Only units that spent are worth funding, and only unanswered ones are
+     asked, so a month already filled in goes straight through. */
+  var relevant=CATS.filter(function(c){ return spent[c]||have[c]!==undefined; });
+  relevant.forEach(function(c){ if(have[c]!==undefined) got[c]=n(have[c]); });
+  var toAsk=relevant.filter(function(c){ return force||have[c]===undefined; });
+
+  function step(i){
+    if(i>=toAsk.length){
+      if(toAsk.length){ S.given[mk]=got; persist(); }
+      if(then) then(S.given[mk]||got);
+      return;
+    }
+    var c=toAsk[i];
+    askText({title:"How much was given for "+c+" in "+monthLabel(mk)+"?",
+             hindi:c+" के लिए इस महीने कितना दिया गया?",
+             note:"Spent so far: "+inr(spent[c])+". Leave blank if nothing was given.",
+             noteHindi:"अब तक खर्च: "+inr(spent[c])+"। कुछ न दिया गया हो तो खाली छोड़ें।",
+             value:have[c]!==undefined?String(n(have[c])):"",
+             yes:"Save",yesHindi:"सहेजें"},
+      function(v){ got[c]=n(v); step(i+1); });
+  }
+  step(0);
 }
 function renderGiven(){
   var mk=$("#p-month").value, given=givenFor(mk), spent=spentByUnit(mk);
@@ -1157,7 +1299,10 @@ function renderGiven(){
    with its own Total and Balance Amt., then G.T. across the blocks. */
 function exportMonth(){
   var mk=$("#p-month").value;
-  var given=askGiven(mk), spent=spentByUnit(mk);
+  askGiven(mk,false,function(given){ writeMonth(mk,given); });
+}
+function writeMonth(mk,given){
+  var spent=spentByUnit(mk);
   var rows=[[ORG],["MONTHLY EXPENSES \u2014 "+monthLabel(mk).toUpperCase()],[]];
   var gt=0, anyGiven=false;
   CATS.forEach(function(c){
@@ -1330,7 +1475,7 @@ function offer(filename,text,mime){
 function exportRegister(){
   var mk=$("#r-month").value;
   var rows=[["Voucher No","Status","Line","Date","Debited A/c","Paid To","Address","Particulars",
-             "Unit","Cost Head","Spent By","Passed By","Mode","Paid From","Line Amount","Voucher Total"]];
+             "Unit","Cost Head","Accountant","Passed By","Mode","Paid From","Line Amount","Voucher Total"]];
   S.entries.filter(function(e){return ym(e.date)===mk;}).sort(function(a,b){return a.date<b.date?-1:1;})
     .forEach(function(e){
       itemsOf(e).forEach(function(it,i){
@@ -1368,7 +1513,12 @@ function exportDaybook(){
 }
 
 /* ---------------- render ---------------- */
+function renderMast(){
+  var sub=$("#mast-sub");
+  if(sub) sub.textContent=ORG+" \u00b7 "+FOUNDATION+" \u00b7 FY "+fyLabel();
+}
 function renderAll(){
+  renderMast();
   renderBanner();
   fillPeople();
   function datalist(sel,vals){
@@ -1394,22 +1544,32 @@ boot();
 function backupNow(){
   var stamp=new Date().toISOString().slice(0,10);
   offer("rokar-backup-"+stamp+".json",JSON.stringify(payload(),null,2),"application/json");
-  var note=$("#backup-note");
-  note.textContent="Backed up "+dmy(stamp)+". Keep the file somewhere off this computer.";
-  note.style.color="var(--ok)";
+  var nb=$("#backup-note");
+  nb.textContent="Backed up "+dmy(stamp)+". Keep the file somewhere off this computer.";
+  nb.style.color="var(--ok)";
 }
 function restoreFrom(file){
   var fr=new FileReader();
   fr.onload=function(){
     var p;
     try{ p=JSON.parse(fr.result); }
-    catch(e){ alert("That file isn't a Rokar backup — it could not be read as JSON."); return; }
-    if(!p||!Array.isArray(p.entries)){ alert("That file isn't a Rokar backup — no voucher list inside."); return; }
+    catch(e){ note("That file isn't a Rokar backup — it could not be read as JSON."); return; }
+    if(!p||!Array.isArray(p.entries)){ note("That file isn't a Rokar backup — no voucher list inside."); return; }
     var msg="Replace the books on this computer with the backup?\n\n"+
             "Backup: "+p.entries.length+" vouchers, "+Object.keys(p.days||{}).length+" daybook days"+
             (p.savedAt?"\nSaved: "+p.savedAt.slice(0,10):"")+
             "\n\nOn this computer now: "+S.entries.length+" vouchers, "+Object.keys(S.days).length+" days.";
-    if(!confirm(msg)) return;
+    ask({title:"Replace the books on this computer with the backup?",
+         hindi:"इस कंप्यूटर की बही को बैकअप से बदलें?",
+         note:msg,
+         noteHindi:"यहाँ की मौजूदा बही मिट जाएगी और बैकअप की बही आ जाएगी।",
+         yes:"Replace",yesHindi:"बदलें",danger:true},function(){ applyRestore(p); });
+    return;
+  };
+  fr.readAsText(file);
+}
+function applyRestore(p){
+  {
     S.entries=p.entries||[]; S.days=p.days||{};
     S.sample=!!p.sample; S.openingSeed=n(p.openingSeed);
     if(p.people&&p.people.length) S.people=p.people;
@@ -1417,10 +1577,10 @@ function restoreFrom(file){
     if(p.payees&&p.payees.length) S.payees=p.payees;
     S.accounts=p.accounts||[]; S.particulars=p.particulars||[];
     persist(); renderAll(); renderReports();
-    var note=$("#backup-note");
-    note.textContent="Restored "+S.entries.length+" vouchers from backup.";
-    note.style.color="var(--ok)";
+    var nb=$("#backup-note");
+    nb.textContent="Restored "+S.entries.length+" vouchers from backup.";
+    nb.style.color="var(--ok)";
   };
-  fr.onerror=function(){ alert("The file could not be opened."); };
+  fr.onerror=function(){ note("The file could not be opened."); };
   fr.readAsText(file);
 }

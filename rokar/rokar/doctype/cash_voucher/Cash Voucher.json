@@ -1,13 +1,12 @@
 {
  "actions": [],
  "allow_rename": 0,
- "autoname": "naming_series:",
+ "autoname": "",
  "creation": "2026-09-10 12:00:00",
  "default_print_format": "Cash Voucher Slip",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "naming_series",
   "posting_date",
   "unit",
   "debited_account",
@@ -30,14 +29,6 @@
   "amended_from"
  ],
  "fields": [
-  {
-   "default": "NGHS/26-27/.####",
-   "fieldname": "naming_series",
-   "fieldtype": "Select",
-   "label": "Series",
-   "options": "NGHS/26-27/.####\nNGHS/27-28/.####",
-   "reqd": 1
-  },
   {
    "default": "Today",
    "fieldname": "posting_date",

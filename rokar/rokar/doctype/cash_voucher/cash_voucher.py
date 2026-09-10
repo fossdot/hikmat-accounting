@@ -4,10 +4,35 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, money_in_words
+from frappe.model.naming import append_number_if_name_exists, make_autoname
+from frappe.utils import flt, getdate, money_in_words
+
+SERIES = "NGHS"
+
+
+def financial_year(posting_date):
+	"""The Indian financial year a date falls in, as "26-27".
+
+	Derived rather than configured, so the series rolls over on 1 April by
+	itself and the app is never tied to one year.
+	"""
+	d = getdate(posting_date)
+	start = d.year if d.month >= 4 else d.year - 1
+	return f"{start % 100:02d}-{(start + 1) % 100:02d}"
 
 
 class CashVoucher(Document):
+	def autoname(self):
+		"""NGHS/26-27/0001, counted within its own financial year.
+
+		make_autoname keeps a counter per prefix, so each April starts a fresh
+		0001 without anything being reset by hand.
+		"""
+		if self.amended_from:
+			self.name = append_number_if_name_exists("Cash Voucher", self.amended_from)
+			return
+		self.name = make_autoname(f"{SERIES}/{financial_year(self.posting_date)}/.####")
+
 	def validate(self):
 		self.total_the_lines()
 		self.apply_unit_rules()
