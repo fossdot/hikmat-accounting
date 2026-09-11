@@ -257,11 +257,18 @@
 {% endblock %}
 
 {%- block script -%}
-<script>window.__ROKAR_USER__ = {{ frappe.session.user | tojson }};</script>
 <script>
-  /* Rokar Settings drives the masthead, so a second school needs no code change. */
-  window.__ROKAR_ORG__ = {{ school_name | tojson }};
-  window.__ROKAR_PLACE__ = {{ place | tojson }};
+  /* One boot object, and no property name starting with a double underscore:
+     Frappe refuses to render a template where a dot is followed by two
+     underscores, guarding against reaching Python internals through Jinja.
+     That check is a plain substring match over the whole file, comments
+     included. Rokar Settings drives the masthead, so a second school needs no
+     code change. */
+  window.rokarBoot = {
+    user: {{ frappe.session.user | tojson }},
+    org: {{ school_name | tojson }},
+    place: {{ place | tojson }}
+  };
 </script>
 <script src="/assets/rokar/storage-frappe.js"></script>
 <script src="/assets/rokar/xlsx.js"></script>

@@ -17,10 +17,11 @@ var DEFAULT_PAYEES=["Local vegetable market"];   /* generic on purpose */
 var DEFAULT_ACCOUNTS={School:"School EXP",Residence:"Residence EXP",STL:"STL A/c",Construction:"Construction A/c"};
 /* On a Frappe site these come from Rokar Settings, injected by the page; the
    standalone build falls back to the school it was written for. */
-var ORG=window.__ROKAR_ORG__||"Noor Girls High School";
-var PLACE=window.__ROKAR_PLACE__||"Meghwal, Mathiya";
-var FOUNDATION=window.__ROKAR_FOUNDATION__||"Hikmat Foundation";
-var SERIES=window.__ROKAR_SERIES__||"NGHS";      /* voucher number prefix */
+var BOOT=window.rokarBoot||{};
+var ORG=BOOT.org||"Noor Girls High School";
+var PLACE=BOOT.place||"Meghwal, Mathiya";
+var FOUNDATION=BOOT.foundation||"Hikmat Foundation";
+var SERIES=BOOT.series||"NGHS";                  /* voucher number prefix */
 
 /* The Indian financial year runs 1 April to 31 March. Every voucher number and
    every label derives its year from a date, so the series rolls over by itself
