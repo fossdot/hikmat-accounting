@@ -6,7 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Oswald:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="/assets/rokar/styles.css">
+<link rel="stylesheet" href="/assets/rokar/styles.css?v={{ asset_v }}">
 <style>
   /* Drop the web template's own gutters and width. Frappe wraps the page in its
      <main>, and so does the app -- so the reset is undone for the inner one,
@@ -268,7 +268,7 @@
     logo: {{ logo | tojson }}
   };
 </script>
-<script src="/assets/rokar/storage-frappe.js"></script>
-<script src="/assets/rokar/xlsx.js"></script>
-<script src="/assets/rokar/app.js"></script>
+<script src="/assets/rokar/storage-frappe.js?v={{ asset_v }}"></script>
+<script src="/assets/rokar/xlsx.js?v={{ asset_v }}"></script>
+<script src="/assets/rokar/app.js?v={{ asset_v }}"></script>
 {%- endblock -%}
