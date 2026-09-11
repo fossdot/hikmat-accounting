@@ -28,12 +28,18 @@ def asset_version():
 
 
 def get_context(context):
-	"""The cash book is staff-only — never cache it, never serve it to Guest."""
-	if frappe.session.user == "Guest":
-		frappe.throw(frappe._("Please log in to open the cash book."), frappe.PermissionError)
+	"""The cash book itself is staff-only.
 
+	Guest is not turned away any more: it is shown a sign-in card carrying the
+	school's own name and emblem, so the staff never meet Frappe's login page.
+	None of the app — not its markup, not the boot block, not app.js — is sent
+	to a session that has not signed in, and every figure it would show comes
+	over the REST API, which answers to the session cookie alone. So the page a
+	stranger can reach is a login form and nothing else.
+	"""
 	context.no_cache = 1
 	context.show_sidebar = False
+	context.guest = frappe.session.user == "Guest"
 	settings = frappe.get_cached_doc("Rokar Settings")
 	context.school_name = settings.school_name
 	context.place = settings.place

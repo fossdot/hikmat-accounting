@@ -50,9 +50,27 @@ bench get-app https://github.com/fossdot/hikmat-accounting --branch main
 bench new-site rokar.localhost --install-app rokar
 ```
 
-The cash book is then at `/rokar` on that site. It is staff-only — the page
-refuses Guest — so log in first. `Rokar Settings` holds the school name, place
-and opening cash balance.
+The cash book is then at `/rokar` on that site. `Rokar Settings` holds the
+school name, place, opening cash balance and the roster.
+
+### Signing in
+
+The staff who keep this book never meet the Frappe login page. Set a **Login
+name** and **Password** under *Cash book login* in `Rokar Settings` and save:
+that creates a Frappe user with the `Rokar Clerk` role and nothing else, and
+`/rokar` greets an unsigned session with a card under the school's own name and
+emblem. To reset the password, type a new one there and save again.
+
+It is a real login — the card posts to Frappe's own endpoint and takes back a
+session cookie; no password is ever checked in the page. Nothing of the cash
+book is rendered to a session that has not signed in, and every figure it shows
+comes over the REST API, which answers to that cookie alone.
+
+A login name with no `@` in it is not an email address, which is what Frappe
+keys a user on, so it becomes `name@rokar.invalid` with the typed name as the
+username — and username login is switched on for the site so that name is
+accepted. Give an email address instead if you would rather that setting stayed
+off.
 
 ### Two frontends, one app
 

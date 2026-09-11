@@ -11,6 +11,11 @@
   "cb0",
   "opening_cash_balance",
   "bank_label",
+  "sb_access",
+  "access_note",
+  "login_id",
+  "cb_access",
+  "login_password",
   "sb_roster",
   "accountants",
   "approvers",
@@ -61,6 +66,34 @@
    "fieldname": "bank_label",
    "fieldtype": "Data",
    "label": "Bank label"
+  },
+  {
+   "fieldname": "sb_access",
+   "fieldtype": "Section Break",
+   "label": "Cash book login"
+  },
+  {
+   "fieldname": "access_note",
+   "fieldtype": "HTML",
+   "options": "<p style='margin:0 0 4px'>The staff who keep the cash book sign in at <b>/rokar</b> with the name and password set here &mdash; they never see this page. Saving this document creates the login if it does not exist, and <b>resets the password to whatever is typed below</b>.</p>"
+  },
+  {
+   "fieldname": "login_id",
+   "fieldtype": "Data",
+   "label": "Login name",
+   "permlevel": 1,
+   "description": "What the staff type at /rokar. A plain name such as <code>rokar</code> is fine &mdash; it also switches on username login for the whole site; an email address avoids that. Leave empty to keep the ordinary Frappe login."
+  },
+  {
+   "fieldname": "cb_access",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "login_password",
+   "fieldtype": "Password",
+   "label": "Password",
+   "permlevel": 1,
+   "description": "Type a new one and Save to reset it. The site's password policy applies, so a dictionary word on its own will be refused."
   },
   {
    "fieldname": "sb_roster",
@@ -116,6 +149,21 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Rokar Clerk",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Rokar Auditor"
   }
  ],
  "sort_field": "modified",
