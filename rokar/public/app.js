@@ -346,6 +346,15 @@ function buildStatic(){
   $("#d-denoms").addEventListener("input",calcDay);
   $("#d-save").addEventListener("click",saveDay);
   $("#d-clear").addEventListener("click",function(){ $$("#d-denoms input").forEach(function(i){i.value="";}); calcDay(); });
+  /* The two print buttons carry the same glyph the register rows use, so the
+     action reads the same wherever it appears. */
+  [["#btn-print","Print this voucher"],["#d-print","Print this day"]].forEach(function(pr){
+    var b=$(pr[0]); if(!b) return;
+    b.classList.add("icon");
+    b.innerHTML=ICONS.print;
+    b.appendChild(el("span",null,pr[1]));
+  });
+
   var rd=$("#r-download");
   rd.innerHTML=ICONS.down;
   rd.title="Download this month\u2019s report";
@@ -1096,15 +1105,15 @@ function calcDay(){
   var opening=openingFor(d), exp=n($("#d-exp").value);
   var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
       oth=n($("#d-oth").value), dep=n($("#d-dep").value);
-  $("#d-open").textContent=inr(opening);
-  $("#d-close").textContent=inr(opening+fee+bus+wdl+oth-exp-dep);
+  $("#d-open").textContent=rs(opening);
+  $("#d-close").textContent=rs(opening+fee+bus+wdl+oth-exp-dep);
   var counted=0;
   $$("#d-denoms input").forEach(function(i){
     var f=Number(i.dataset.face), q=n(i.value), v=f*q;
     counted+=v;
-    var cell=$('#d-denoms td[data-val="'+f+'"]'); if(cell) cell.textContent=inr(v);
+    var cell=$('#d-denoms td[data-val="'+f+'"]'); if(cell) cell.textContent=rs(v);
   });
-  $("#d-dtot").textContent=inr(counted);
+  $("#d-dtot").textContent=rs(counted);
   var collected=fee+bus+oth, diff=counted-collected;
   var bar=$("#d-var");
   bar.className="varbar "+(diff===0?"ok":"bad");
@@ -1155,7 +1164,7 @@ function renderDayTable(){
     var tr=el("tr");
     tr.appendChild(el("td",null,dmy(k)));
     [day.opening,day.fee,day.bus,day.wdl,exp,day.deposit,closingOf(k),day.upi].forEach(function(v,i){
-      var td=el("td","r num",inr(v));
+      var td=el("td","r num",rs(v));
       if(i===5&&n(v)>0) td.style.color="var(--blue)";
       if(i===6) td.style.fontWeight="600";
       tr.appendChild(td);
@@ -1163,7 +1172,7 @@ function renderDayTable(){
     var td=el("td");
     if(!Object.keys(day.denoms||{}).length) td.appendChild(el("span","pill p-mute","not counted"));
     else if(counted===coll) td.appendChild(el("span","pill p-ok","tallies"));
-    else { var p=el("span","pill p-bad",(counted-coll>0?"+":"")+inr(counted-coll)); td.appendChild(p); }
+    else { var p=el("span","pill p-bad",(counted-coll>0?"+":"")+rs(counted-coll)); td.appendChild(p); }
     tr.appendChild(td);
     tb.appendChild(tr);
   });
@@ -1246,7 +1255,7 @@ function renderRegister(){
     var c=el("td"); c.appendChild(el("span","pill p-"+e.category.toLowerCase(),e.category)); tr.appendChild(c);
     tr.appendChild(el("td",null,e.head||"\u2014"));
     tr.appendChild(el("td",null,e.by));
-    tr.appendChild(el("td","r num",inr(e.amount)));
+    tr.appendChild(el("td","r num",rs(e.amount)));
     /* A draft can be corrected, submitted or thrown away; once submitted the
        only way back is to delete it and write a fresh one. Print, edit and
        delete are icons \u2014 everyone reads them. Submit stays a word: it moves
@@ -1259,7 +1268,7 @@ function renderRegister(){
     tb.appendChild(tr);
   });
   var ftr=el("tr"); var f1=el("td",null,"Total — "+monthLabel(mk)); f1.colSpan=9;
-  ftr.appendChild(f1); ftr.appendChild(el("td","r num",inr(total))); ftr.appendChild(el("td"));
+  ftr.appendChild(f1); ftr.appendChild(el("td","r num",rs(total))); ftr.appendChild(el("td"));
   tf.appendChild(ftr);
 }
 
@@ -1295,8 +1304,8 @@ function askGivenList(mk,units,then){
     var c=toAsk[i];
     askText({title:"How much was given for "+c+" in "+monthLabel(mk)+"?",
              hindi:c+" के लिए इस महीने कितना दिया गया?",
-             note:"Spent so far: "+inr(spent[c])+". Leave blank if nothing was given.",
-             noteHindi:"अब तक खर्च: "+inr(spent[c])+"। कुछ न दिया गया हो तो खाली छोड़ें।",
+             note:"Spent so far: "+rs(spent[c])+". Leave blank if nothing was given.",
+             noteHindi:"अब तक खर्च: "+rs(spent[c])+"। कुछ न दिया गया हो तो खाली छोड़ें।",
              value:have[c]!==undefined?String(n(have[c])):"",
              yes:"Save",yesHindi:"सहेजें"},
       function(v){ got[c]=n(v); step(i+1); });
@@ -1323,7 +1332,7 @@ function downloadFromRegister(){
              note:"Submitted vouchers only \u2014 drafts and cancelled ones stay out.",
              noteHindi:"केवल जमा किए गए वाउचर; ड्राफ़्ट और रद्द बाहर रहेंगे।",
              choices:CATS.map(function(c){
-               return {value:c,label:c,amount:spent[c]?inr(spent[c]):"\u2014",
+               return {value:c,label:c,amount:spent[c]?rs(spent[c]):"\u2014",
                        checked:only?(c===only):!!spent[c]};
              }),
              yes:"Next",yesHindi:"आगे"},function(units){
@@ -1350,9 +1359,9 @@ function renderGiven(){
     gt+=bal; sumGiven+=g; sumSpent+=spent[c];
     var tr=el("tr");
     var u=el("td"); u.appendChild(el("span","pill p-"+c.toLowerCase(),c)); tr.appendChild(u);
-    tr.appendChild(el("td","r num",given[c]===undefined?"\u2014":inr(g)));
-    tr.appendChild(el("td","r num",inr(spent[c])));
-    var b=el("td","r num",given[c]===undefined?"\u2014":inr(bal));
+    tr.appendChild(el("td","r num",given[c]===undefined?"\u2014":rs(g)));
+    tr.appendChild(el("td","r num",rs(spent[c])));
+    var b=el("td","r num",given[c]===undefined?"\u2014":rs(bal));
     if(given[c]!==undefined&&bal<0) b.style.color="var(--bad)";
     tr.appendChild(b);
     tb.appendChild(tr);
@@ -1365,9 +1374,9 @@ function renderGiven(){
   if(anyGiven){
     var tf=el("tfoot"), fr=el("tr");
     fr.appendChild(el("td",null,"G.T"));
-    fr.appendChild(el("td","r num",inr(sumGiven)));
-    fr.appendChild(el("td","r num",inr(sumSpent)));
-    fr.appendChild(el("td","r num",inr(gt)));
+    fr.appendChild(el("td","r num",rs(sumGiven)));
+    fr.appendChild(el("td","r num",rs(sumSpent)));
+    fr.appendChild(el("td","r num",rs(gt)));
     tf.appendChild(fr); T.appendChild(tf);
   }
 }
@@ -1475,7 +1484,7 @@ function renderReports(){
       HEADS_ALL.forEach(function(h){
         var v=mine.filter(function(e){return e.head===h;}).reduce(function(a,e){return a+n(e.amount);},0);
         colTot[h]+=v;
-        tr.appendChild(el("td","r num",v?inr(v):"\u2014"));
+        tr.appendChild(el("td","r num",v?rs(v):"\u2014"));
       });
     } else {
       var na=el("td","r"); na.colSpan=HEADS_ALL.length;
@@ -1483,13 +1492,13 @@ function renderReports(){
       na.textContent="no cost head \u2014 booked to account";
       tr.appendChild(na);
     }
-    var tt=el("td","r num",rowTot?inr(rowTot):"\u2014"); tt.style.fontWeight="600"; tr.appendChild(tt);
+    var tt=el("td","r num",rowTot?rs(rowTot):"\u2014"); tt.style.fontWeight="600"; tr.appendChild(tt);
     body.appendChild(tr);
   });
   M.appendChild(body);
   var tf=el("tfoot"), ftr=el("tr"); ftr.appendChild(el("td",null,"Total"));
-  HEADS_ALL.forEach(function(h){ ftr.appendChild(el("td","r num",colTot[h]?inr(colTot[h]):"\u2014")); });
-  ftr.appendChild(el("td","r num",inr(grand))); tf.appendChild(ftr); M.appendChild(tf);
+  HEADS_ALL.forEach(function(h){ ftr.appendChild(el("td","r num",colTot[h]?rs(colTot[h]):"\u2014")); });
+  ftr.appendChild(el("td","r num",rs(grand))); tf.appendChild(ftr); M.appendChild(tf);
 
   renderGiven();
 
@@ -1499,7 +1508,7 @@ function renderReports(){
   var names=Object.keys(agg).sort(function(a,b){return agg[b]-agg[a];});
   var mx=names.length?agg[names[0]]:1;
   var ph=el("thead"); var phr=el("tr");
-  ["Person","Share","Amount ₹"].forEach(function(h,i){ phr.appendChild(el("th",i===2?"r":"",h)); });
+  ["Person","Share","Amount"].forEach(function(h,i){ phr.appendChild(el("th",i===2?"r":"",h)); });
   ph.appendChild(phr); P.appendChild(ph);
   var pb=el("tbody");
   if(!names.length){ var etr=el("tr"); var etd=el("td","empty","No vouchers this month."); etd.colSpan=3; etr.appendChild(etd); pb.appendChild(etr); }
@@ -1511,14 +1520,14 @@ function renderReports(){
     w.appendChild(bar); w.appendChild(el("span","num",Math.round(agg[nm]/grand*100||0)+"%"));
     $$("span",w)[0].style.cssText="font-size:11.5px;color:var(--muted)";
     bc.appendChild(w); tr.appendChild(bc);
-    tr.appendChild(el("td","r num",inr(agg[nm])));
+    tr.appendChild(el("td","r num",rs(agg[nm])));
     pb.appendChild(tr);
   });
   P.appendChild(pb);
 
   /* money movement */
   var MM=$("#p-money"); MM.innerHTML="";
-  var mh=el("thead"), mhr=el("tr"); mhr.appendChild(el("th",null,"Line")); mhr.appendChild(el("th","r","Amount ₹"));
+  var mh=el("thead"), mhr=el("tr"); mhr.appendChild(el("th",null,"Line")); mhr.appendChild(el("th","r","Amount"));
   mh.appendChild(mhr); MM.appendChild(mh);
   var mb=el("tbody");
   [["Opening cash",opening],["Fee cash received",feeCash],["Bus fee cash received",busCash],
@@ -1526,7 +1535,7 @@ function renderReports(){
    ["Deposited to bank",-dep],["Closing cash",closing]].forEach(function(r,i,arr){
     var tr=el("tr");
     tr.appendChild(el("td",null,r[0]));
-    var td=el("td","r num",(r[1]<0?"(":"")+inr(Math.abs(r[1]))+(r[1]<0?")":""));
+    var td=el("td","r num",(r[1]<0?"(":"")+rs(Math.abs(r[1]))+(r[1]<0?")":""));
     if(r[1]<0) td.style.color="var(--accent-ink)";
     if(i===arr.length-1||i===0) td.style.fontWeight="600";
     tr.appendChild(td); mb.appendChild(tr);
@@ -1546,19 +1555,19 @@ function renderReports(){
     var day=S.days[k], coll=n(day.fee)+n(day.bus)+n(day.other), counted=countedOf(k), diff=counted-coll;
     var tr=el("tr");
     tr.appendChild(el("td",null,dmy(k)));
-    tr.appendChild(el("td","r num",inr(day.fee)));
-    tr.appendChild(el("td","r num",inr(day.bus)));
-    var ct=el("td","r num",inr(coll)); ct.style.fontWeight="600"; tr.appendChild(ct);
-    tr.appendChild(el("td","r num",Object.keys(day.denoms||{}).length?inr(counted):"—"));
+    tr.appendChild(el("td","r num",rs(day.fee)));
+    tr.appendChild(el("td","r num",rs(day.bus)));
+    var ct=el("td","r num",rs(coll)); ct.style.fontWeight="600"; tr.appendChild(ct);
+    tr.appendChild(el("td","r num",Object.keys(day.denoms||{}).length?rs(counted):"—"));
     var vt=el("td","r");
     if(!Object.keys(day.denoms||{}).length) vt.appendChild(el("span","pill p-mute","not counted"));
     else if(diff===0) vt.appendChild(el("span","pill p-ok","0"));
-    else vt.appendChild(el("span","pill p-bad",(diff>0?"+":"")+inr(diff)));
+    else vt.appendChild(el("span","pill p-bad",(diff>0?"+":"")+rs(diff)));
     tr.appendChild(vt);
-    var ut=el("td","r num",inr(day.upi)); ut.style.color="var(--blue)"; tr.appendChild(ut);
+    var ut=el("td","r num",rs(day.upi)); ut.style.color="var(--blue)"; tr.appendChild(ut);
     var bt=el("td");
-    if(n(day.wdl)>0) bt.appendChild(el("span","pill p-warn","withdrew "+inr(day.wdl)));
-    if(n(day.deposit)>0) bt.appendChild(el("span","pill p-ok","deposited "+inr(day.deposit)));
+    if(n(day.wdl)>0) bt.appendChild(el("span","pill p-warn","withdrew "+rs(day.wdl)));
+    if(n(day.deposit)>0) bt.appendChild(el("span","pill p-ok","deposited "+rs(day.deposit)));
     tr.appendChild(bt);
     cb.appendChild(tr);
   });

@@ -107,6 +107,9 @@ input[type=number],.amt{font-family:var(--mono);font-variant-numeric:tabular-num
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-strong);font-weight:500}
 .btn.ghost:hover{background:var(--surface-2);filter:none}
 .btn.sm{padding:5px 11px;font-size:12px}
+.btn.icon{display:inline-flex;align-items:center;gap:7px}
+.btn svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
+         stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 
 /* ---------- chips / pills ---------- */
