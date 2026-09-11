@@ -985,12 +985,13 @@ function addVoucher(ev){
     var prev=entryById(editingId);
     if(!prev){ note("That draft is no longer in the register."); editingId=null; syncFormMode(); return; }
     if(statusOf(prev)!=="Draft"){ note("Only a draft can be edited \u2014 amend the voucher instead."); return; }
-    /* A corrected voucher gets its own number, in the same "-1" series an
-       amendment uses. A draft may already have been printed and handed over,
-       and two papers must never carry the same number. */
-    d.id=prev.id; d.no=amendNo(prev.no); d.ts=prev.ts; d.serverSaved=prev.serverSaved;
+    /* A draft keeps its number while it is corrected. On a Frappe site the
+       server owns the name and will not rename a voucher, so renumbering here
+       invents a document the server does not have -- the PUT then lands on a
+       name that was never created. The "-1" belongs to amendment, where a
+       genuinely new document exists. */
+    d.id=prev.id; d.no=prev.no; d.ts=prev.ts; d.serverSaved=prev.serverSaved;
     d.status="Draft"; d.amended_from=prev.amended_from||null;
-    d.revisedFrom=prev.no;
     S.entries=S.entries.map(function(x){return x.id===prev.id?d:x;});
   } else {
     d.id=uid(); d.no=amendBase?amendNo(amendBase):nextNo(d.date); d.ts=Date.now();
@@ -1239,9 +1240,8 @@ function renderRegister(){
     total+=n(e.amount);
     var tr=el("tr");
     var vn=el("td","vno",e.no);
-    if(e.amended_from||e.revisedFrom){
-      var af=el("div",null,e.amended_from?("amends "+e.amended_from)
-                                         :("revised from "+e.revisedFrom));
+    if(e.amended_from){
+      var af=el("div",null,"amends "+e.amended_from);
       af.style.cssText="font-size:10.5px;color:var(--muted);margin-top:2px"; vn.appendChild(af);
     }
     tr.appendChild(vn);

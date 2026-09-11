@@ -19,6 +19,26 @@
   var BASE = "";            // same-origin. Otherwise: "https://books.example.org"
   var CREDENTIALS = "same-origin";
 
+  /* Frappe reports failures as a JSON envelope inside a JSON string inside a
+     list. Dig the human sentence out of it; fall back to the raw text only when
+     the shape is not what we expect. */
+  function readableError(j, fallback) {
+    var out = [];
+    if (j && j._server_messages) {
+      try {
+        JSON.parse(j._server_messages).forEach(function (m) {
+          try { out.push(JSON.parse(m).message); } catch (e) { out.push(String(m)); }
+        });
+      } catch (e) { /* not the usual shape */ }
+    }
+    if (!out.length && j && j.exception) {
+      out.push(String(j.exception).replace(/^[\w.]*(?:Error|Exception):\s*/, ""));
+    }
+    if (!out.length && j && typeof j.message === "string") out.push(j.message);
+    var text = out.join(" ").replace(/<[^>]*>/g, "").trim();
+    return (text || fallback || "unknown error").slice(0, 300);
+  }
+
   function api(path, opts) {
     opts = opts || {};
     var headers = { Accept: "application/json" };
@@ -34,10 +54,7 @@
       body: opts.body ? JSON.stringify(opts.body) : undefined
     }).then(function (r) {
       return r.json().then(function (j) {
-        if (!r.ok) {
-          var msg = (j && (j.exception || j._server_messages || j.message)) || r.statusText;
-          throw new Error(String(msg).slice(0, 300));
-        }
+        if (!r.ok) throw new Error(readableError(j, r.statusText));
         return j;
       });
     });
@@ -164,11 +181,12 @@
                .then(function (r) { return r.data; });
     },
 
+    /** Submitting is a docstatus change on the stored document.
+     *  frappe.client.submit wants a whole doc dict including its `modified`
+     *  timestamp, and sending a partial one earns a TimestampMismatchError. */
     submitVoucher: function (name) {
-      return api("/api/method/frappe.client.submit", {
-        method: "POST",
-        body: { doc: { doctype: "Cash Voucher", name: name } }
-      });
+      return api("/api/resource/Cash Voucher/" + encodeURIComponent(name),
+                 { method: "PUT", body: { docstatus: 1 } });
     },
 
     /** Cancelling leaves the voucher in place at docstatus 2 — the register
