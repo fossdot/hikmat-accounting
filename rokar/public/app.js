@@ -43,7 +43,7 @@ function fyLabel(iso){ var a=fyStart(iso); return a+"\u2011"+yy(a+1); }
 /* ---------------- state ---------------- */
 var S={entries:[],days:{},mode:"local",sample:true,openingSeed:0,
        people:DEFAULT_PEOPLE.slice(),approvers:DEFAULT_APPROVERS.slice(),
-       payees:DEFAULT_PAYEES.slice(),accounts:[],particulars:[],given:{}};
+       payees:DEFAULT_PAYEES.slice(),accounts:[],particulars:[],given:{},series:{}};
 
 
 /* ---------------- helpers ---------------- */
@@ -243,7 +243,8 @@ function seed(){
 function payload(){return {v:1,rosterVersion:ROSTER_VERSION,savedAt:new Date().toISOString(),
                            entries:S.entries,days:S.days,sample:S.sample,openingSeed:S.openingSeed,
                            people:S.people,approvers:S.approvers,payees:S.payees,
-                           accounts:S.accounts,particulars:S.particulars,given:S.given};}
+                           accounts:S.accounts,particulars:S.particulars,given:S.given,
+                           series:S.series};}
 function roster(){return {sample:S.sample,openingSeed:S.openingSeed,org:ORG,fy:fyOf(),
                           people:S.people,approvers:S.approvers,accounts:S.accounts};}
 function saveLocal(){
@@ -283,6 +284,7 @@ function applyLoaded(raw){
              if(p.accounts) S.accounts=p.accounts;
              if(p.particulars) S.particulars=p.particulars;
              if(p.given) S.given=p.given;
+             if(p.series) S.series=p.series;
              /* The standing roster is set by the foundation, not by the browser:
                 an older save keeps its payees but takes the current staff list. */
              if(n(p.rosterVersion)<ROSTER_VERSION){
@@ -594,27 +596,21 @@ function showTab(name){
 
 /* ---------------- document lifecycle ----------------
    A voucher is a Draft while it can still be corrected, Submitted once it is
-   part of the books, and Cancelled when it has been withdrawn. Only Submitted
-   vouchers reach the daybook, the monthly reports and the Tally export, so an
-   unfinished entry can sit in the register without moving the cash position.
-   Vouchers saved before the lifecycle existed carry no status and are read as
-   Submitted, so books that already balance keep their figures. */
+   part of the books. Only Submitted vouchers reach the daybook, the monthly
+   reports and the Tally export, so an unfinished entry can sit in the register
+   without moving the cash position. A voucher that turns out to be wrong is
+   deleted and written again from scratch -- there is no cancel and no
+   amendment, because a school cash book gains nothing from carrying a
+   withdrawn document around. Vouchers saved before the lifecycle existed carry
+   no status and are read as Submitted, so books that already balance keep
+   their figures. */
 var editingId=null;      /* draft open in the form, if any */
-var amendBase=null;      /* voucher no this draft is an amendment of */
 function statusOf(e){ return e.status||"Submitted"; }
 function isPosted(e){ return statusOf(e)==="Submitted"; }
 function posted(list){ return list.filter(isPosted); }
 function entryById(id){ return S.entries.filter(function(x){return x.id===id;})[0]; }
 function say(msg){ var b=$("#v-status"); if(b) b.textContent=msg||""; }
 
-/* Frappe's numbering for a corrected document: the original series number with
-   "-1", "-2" ... appended, so the trail shows which voucher it replaces. */
-function amendNo(base){
-  var root=String(base).replace(/-\d+$/,"");
-  var re=new RegExp("^"+root.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"-(\\d+)$"), mx=0;
-  S.entries.forEach(function(e){ var m=re.exec(e.no||""); if(m) mx=Math.max(mx,Number(m[1])); });
-  return root+"-"+(mx+1);
-}
 function press(sel,val){
   if(!val) return;
   var c=$$(".chip",$(sel)).filter(function(b){return b.dataset.val===val;})[0];
@@ -646,12 +642,12 @@ function syncFormMode(){
   var e=editingId?entryById(editingId):null;
   var draft=!!(e&&statusOf(e)==="Draft");
   $("#v-submit").hidden=!draft;
-  $("#v-save").textContent=draft?"Save changes":(amendBase?"Save amended draft":"Save draft");
+  $("#v-save").textContent=draft?"Save changes":"Save draft";
 }
 function editDraft(id){
   var e=entryById(id); if(!e) return;
   if(statusOf(e)!=="Draft"){ note("Only a draft can be edited."); return; }
-  editingId=id; amendBase=null; showTab("voucher"); loadIntoForm(e);
+  editingId=id; showTab("voucher"); loadIntoForm(e);
   say("Editing draft "+e.no+".");
 }
 function submitEntry(id,asked){
@@ -676,33 +672,6 @@ function submitEntry(id,asked){
        noteHindi:"यह रोकड़ बही और मासिक रिपोर्ट में दर्ज हो जाएगा। इसके बाद सुधार केवल रद्द कर के ही हो सकेगा।",
        yes:"Submit",yesHindi:"जमा करें"},go);
 }
-function cancelEntry(id){
-  var e=entryById(id); if(!e) return;
-  if(statusOf(e)!=="Submitted"){ note("Only a submitted voucher can be cancelled."); return; }
-  ask({title:"Cancel voucher "+e.no+"?",
-       hindi:"यह वाउचर रद्द करें?",
-       note:"It leaves the daybook and the reports but stays in the register marked Cancelled, so the trail is intact. Amend it only if a corrected voucher has to be issued in its place.",
-       noteHindi:"यह रोकड़ बही और रिपोर्ट से हट जाएगा, पर बही में ‘रद्द’ के रूप में बना रहेगा। सुधरा वाउचर देना हो तभी सुधार करें।",
-       yes:"Cancel voucher",yesHindi:"रद्द करें",danger:true},function(){
-    e.status="Cancelled"; e.cancelledAt=Date.now();
-    persist(); renderAll(); say("Voucher "+e.no+" cancelled \u2014 out of the reports, still in the register.");
-    if(Storage.cancelVoucher&&e.serverSaved){ Storage.cancelVoucher(e.no).catch(function(){}); }
-  });
-}
-/* Opens a copy of a cancelled voucher as a fresh draft under a "-1" number. */
-function amendEntry(id){
-  var e=entryById(id); if(!e) return;
-  if(statusOf(e)!=="Cancelled"){ note("Cancel the voucher first \u2014 only a cancelled voucher can be amended."); return; }
-  ask({title:"Amend voucher "+e.no+"?",
-       hindi:"इस वाउचर में सुधार करें?",
-       note:"A corrected voucher "+amendNo(e.no)+" opens as a draft. Save it, then submit it. This one stays cancelled.",
-       noteHindi:"सुधरा हुआ वाउचर "+amendNo(e.no)+" ड्राफ़्ट के रूप में खुलेगा। सहेजें, फिर जमा करें। यह वाउचर रद्द ही रहेगा।",
-       yes:"Amend",yesHindi:"सुधारें"},function(){
-    editingId=null; amendBase=e.no; showTab("voucher"); loadIntoForm(e);
-    say("Amending "+e.no+" as "+amendNo(e.no)+" \u2014 correct it, save the draft, then submit.");
-  });
-}
-
 /* ---------------- printing ----------------
    The voucher goes on A5 landscape and the day sheet on A4 landscape. A
    stylesheet can only hold one @page size, so the rule is injected just before
@@ -855,9 +824,15 @@ function printEntry(id){
 
 /* ---------------- voucher ---------------- */
 /* The next number in the financial year the voucher itself falls in, so a
-   voucher back-dated into March takes last year's series, not this year's. */
+   voucher back-dated into March takes last year's series, not this year's.
+
+   The series only counts forward. Deleting the newest voucher must not hand
+   its number to the next one: the gap is the record that something was taken
+   out, and Frappe's own make_autoname counter behaves the same way, so the
+   two builds would otherwise drift apart. S.series holds the high-water mark
+   per year. */
 function nextNo(dateISO){
-  var pre=SERIES+"/"+fyOf(dateISO)+"/", mx=0;
+  var fy=fyOf(dateISO), pre=SERIES+"/"+fy+"/", mx=n((S.series||{})[fy]);
   S.entries.forEach(function(e){
     var no=String(e.no||"");
     if(no.indexOf(pre)!==0) return;              /* another year's series */
@@ -865,6 +840,13 @@ function nextNo(dateISO){
     var m=/(\d+)(?:-\d+)?$/.exec(no); if(m) mx=Math.max(mx,Number(m[1]));
   });
   return pre+String(mx+1).padStart(4,"0");
+}
+/* Records that a number has been handed out, so it is never offered again. */
+function claimNo(no,dateISO){
+  var m=/(\d+)(?:-\d+)?$/.exec(String(no||"")); if(!m) return;
+  var fy=fyOf(dateISO);
+  S.series=S.series||{};
+  S.series[fy]=Math.max(n(S.series[fy]),Number(m[1]));
 }
 function formData(){
   var items=readItems();
@@ -882,8 +864,8 @@ function formData(){
    S.NO.-Particulars-Amount table, Rupees in Word + Total, three signatures. */
 function renderSlip(){
   var d=formData(), cur=editingId?entryById(editingId):null;
-  var no=cur?cur.no:(amendBase?amendNo(amendBase):nextNo(d.date));
-  $("#next-no").textContent=(cur?"Draft: ":amendBase?"Amending as: ":"Next: ")+no;
+  var no=cur?cur.no:nextNo(d.date);
+  $("#next-no").textContent=(cur?"Draft: ":"Next: ")+no;
   $("#f-total").textContent=inr(d.amount);
   $("#f-words").textContent=d.amount?words(d.amount):"\u2014";
   var s=$("#slip"); s.innerHTML="";
@@ -991,14 +973,15 @@ function addVoucher(ev){
        name that was never created. The "-1" belongs to amendment, where a
        genuinely new document exists. */
     d.id=prev.id; d.no=prev.no; d.ts=prev.ts; d.serverSaved=prev.serverSaved;
-    d.status="Draft"; d.amended_from=prev.amended_from||null;
+    d.status="Draft";
     S.entries=S.entries.map(function(x){return x.id===prev.id?d:x;});
   } else {
-    d.id=uid(); d.no=amendBase?amendNo(amendBase):nextNo(d.date); d.ts=Date.now();
-    d.status="Draft"; d.amended_from=amendBase||null;
+    d.id=uid(); d.no=nextNo(d.date); d.ts=Date.now();
+    d.status="Draft";
+    claimNo(d.no,d.date);
     S.entries.push(d);
   }
-  amendBase=null; editingId=d.id;
+  editingId=d.id;
   if(d.account && S.accounts.indexOf(d.account)<0){ S.accounts.push(d.account); persistRoster(); }
   d.items.forEach(function(it){
     if(it.particulars && S.particulars.indexOf(it.particulars)<0) S.particulars.unshift(it.particulars);
@@ -1025,6 +1008,7 @@ function addVoucher(ev){
     Storage.saveVoucher(d).then(function(saved){
       if(editingId===d.id) editingId=saved.name;
       d.no=saved.name; d.id=saved.name; d.serverSaved=true;   /* adopt Frappe's series number */
+      claimNo(d.no,d.date);
       persist(); renderAll(); syncFormMode(); askSubmit();
     }).catch(function(err){
       S.entries=S.entries.filter(function(x){return x.id!==d.id;});   /* do not keep a row the server rejected */
@@ -1039,27 +1023,43 @@ function addVoucher(ev){
 /* Keeps date, unit, cost head, Debited A/c and both signatories — a clerk
    entering ten School vouchers in a row only retypes payee, detail, amount. */
 function resetForm(){
-  editingId=null; amendBase=null; say("");
+  editingId=null; say("");
   var keepDate=$("#f-date").value;
   $("#f-addr").value=""; setItems([{particulars:"",amount:""}]);
   $("#f-date").value=keepDate||todayISO();
   renderSlip(); syncFormMode(); $("#f-payee").focus();
 }
+/* Delete is the only way back from Submitted: there is no cancel and no
+   amendment, so a voucher that turns out to be wrong is removed and written
+   again from scratch. The number is not reused -- the series only ever counts
+   forward -- so the gap in the register is the record that something was
+   taken out. */
 function delEntry(id){
   var e=entryById(id); if(!e) return;
-  if(statusOf(e)==="Submitted"){
-    note("Voucher "+e.no+" is submitted. Cancel it instead \u2014 the register keeps a record of "+
-          "what was withdrawn, which a deletion would destroy.");
-    return;
-  }
-  ask({title:"Delete "+statusOf(e).toLowerCase()+" voucher "+e.no+"?",
+  var wasSubmitted=statusOf(e)!=="Draft";
+  ask({title:"Delete voucher "+e.no+"?",
        hindi:"यह वाउचर मिटाएँ?",
-       note:"This removes it for good \u2014 no copy is kept anywhere.",
-       noteHindi:"यह स्थायी रूप से मिट जाएगा — कहीं कोई प्रति नहीं बचेगी।",
+       note:wasSubmitted
+         ? "It is submitted and counted in the books. Deleting takes it out of the "+
+           "daybook and the reports for good, and a replacement has to be entered fresh."
+         : "This removes the draft for good. Nothing in the books changes.",
+       noteHindi:wasSubmitted
+         ? "यह जमा हो चुका है और बही में गिना जा रहा है। मिटाने पर यह रोकड़ बही और रिपोर्ट से हमेशा के लिए हट जाएगा; नया वाउचर नए सिरे से बनाना होगा।"
+         : "यह ड्राफ़्ट स्थायी रूप से मिट जाएगा। बही में कोई बदलाव नहीं होगा।",
        yes:"Delete",yesHindi:"मिटाएँ",danger:true},function(){
+    var at=S.entries.indexOf(e);
     S.entries=S.entries.filter(function(x){return x.id!==id;});
     if(editingId===id) resetForm();
-    persist(); renderAll();
+    persist(); renderAll(); say("Voucher "+e.no+" deleted.");
+    if(Storage.deleteVoucher&&e.serverSaved){
+      Storage.deleteVoucher(e.no,wasSubmitted).catch(function(err){
+        /* put it back rather than let the register disagree with the server */
+        S.entries.splice(at<0?S.entries.length:at,0,e);
+        persist(); renderAll();
+        note("The server did not delete this voucher: "+((err&&err.message)||"unknown error")+
+             " It is back in the register.");
+      });
+    }
   });
 }
 
@@ -1209,22 +1209,11 @@ function actionBtn(name,fn,id){
   b.addEventListener("click",function(){ fn(id); });
   return b;
 }
-/* Numbers that a later amendment has replaced. A cancelled voucher stays in
-   the register on its own \u2014 that is the point of cancelling \u2014 but once a
-   corrected voucher has been issued for it, showing both would list the same
-   expense twice. The superseded row stays in the data and in the register
-   export, where an auditor needs the whole chain. */
-function supersededNos(){
-  var out={};
-  S.entries.forEach(function(e){ if(e.amended_from) out[e.amended_from]=1; });
-  return out;
-}
 function renderRegister(){
   fillMonths($("#r-month"));
   var mk=$("#r-month").value, cat=$("#r-cat").value;
-  var gone=supersededNos();
   var rows=S.entries.filter(function(e){
-                      return ym(e.date)===mk&&(!cat||e.category===cat)&&!gone[e.no];
+                      return ym(e.date)===mk&&(!cat||e.category===cat);
                     })
                     .sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:(a.no<b.no?-1:1);});
   var tb=$("#r-table tbody"), tf=$("#r-table tfoot");
@@ -1240,10 +1229,6 @@ function renderRegister(){
     total+=n(e.amount);
     var tr=el("tr");
     var vn=el("td","vno",e.no);
-    if(e.amended_from){
-      var af=el("div",null,"amends "+e.amended_from);
-      af.style.cssText="font-size:10.5px;color:var(--muted);margin-top:2px"; vn.appendChild(af);
-    }
     tr.appendChild(vn);
     var st=statusOf(e), stc=el("td");
     stc.appendChild(el("span","pill "+(st==="Draft"?"p-warn":st==="Cancelled"?"p-bad":"p-ok"),st));
@@ -1262,16 +1247,13 @@ function renderRegister(){
     tr.appendChild(el("td",null,e.head||"\u2014"));
     tr.appendChild(el("td",null,e.by));
     tr.appendChild(el("td","r num",inr(e.amount)));
-    /* Only the moves the status allows: a draft is edited, submitted or thrown
-       away; a submitted voucher can only be cancelled; a cancelled one amended.
-       Print, edit and delete are icons \u2014 everyone reads them, and four text
-       links wrapped the column onto three lines. Submit, cancel and amend stay
-       as words: they move money in or out of the books, and a bare glyph on an
-       action that cannot be taken back invites a misclick. */
+    /* A draft can be corrected, submitted or thrown away; once submitted the
+       only way back is to delete it and write a fresh one. Print, edit and
+       delete are icons \u2014 everyone reads them. Submit stays a word: it moves
+       money into the books, and a bare glyph on that invites a misclick. */
     var x=el("td","acts");
-    var acts=st==="Draft"    ? [["print",printEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
-           : st==="Submitted"? [["print",printEntry],["cancel",cancelEntry]]
-           :                   [["print",printEntry],["delete",delEntry],["amend",amendEntry]];
+    var acts=st==="Draft" ? [["print",printEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
+                          : [["print",printEntry],["delete",delEntry]];
     acts.forEach(function(a){ x.appendChild(actionBtn(a[0],a[1],e.id)); });
     tr.appendChild(x);
     tb.appendChild(tr);

@@ -13,12 +13,14 @@ landscape to match the school's voucher book — choose "Save as PDF" in the pri
 dialog to keep a copy. Construction vouchers print with a contractor signature
 block instead of "Passed by", as the paper ones do.
 
-**The document lifecycle** follows Frappe's own: a voucher is saved as a
-**Draft**, **Submitted** once it belongs in the books, **Cancelled** if it is
-withdrawn, and a cancelled voucher can be **Amended** into a corrected one
-numbered `…-1`. Only submitted vouchers reach the daybook, the monthly reports
-and the Tally export, so an unfinished entry never moves the cash position. A
-cancelled voucher stays visible in the register and drops out of the reports.
+**The document lifecycle** is three steps: a voucher is saved as a **Draft**,
+**Submitted** once it belongs in the books, and **Deleted** if it turns out to
+be wrong — there is no cancel and no amendment. A school cash book gains
+nothing from carrying a withdrawn document around, so a bad voucher is removed
+and written again from scratch. Only submitted vouchers reach the daybook, the
+monthly reports and the Tally export, so an unfinished entry never moves the
+cash position. Numbers are never reused, so a gap in the series is itself the
+record that something was taken out.
 
 **The daybook** carries the opening balance forward, totals the day's cash
 vouchers automatically, and reconciles a note-by-note currency count against

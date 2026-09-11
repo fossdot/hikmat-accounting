@@ -70,7 +70,7 @@
   var FIELDS = [
     "name", "posting_date", "unit", "debited_account", "cost_head",
     "payee", "address", "particulars", "amount", "spent_by", "passed_by",
-    "docstatus", "amended_from"
+    "docstatus"
   ];
 
   /* Frappe's docstatus is the lifecycle app.js works in: 0 draft, 1 submitted,
@@ -126,7 +126,6 @@
               }),
               by: v.spent_by, approved: v.passed_by || "",
               status: statusFrom(v.docstatus),
-              amended_from: v.amended_from || null,
               serverSaved: true          /* so submit and cancel reach the server */
             });
           });
@@ -167,10 +166,6 @@
         }),
         spent_by: e.by, passed_by: e.approved || null
       };
-      /* Links the amendment to the voucher it replaces, so the desk shows the
-         same chain the register does. */
-      if (e.amended_from) body.amended_from = e.amended_from;
-
       /* Editing a draft must update that document. Posting again would leave
          two vouchers where the clerk corrected one. */
       if (e.serverSaved && e.no) {
@@ -189,13 +184,22 @@
                  { method: "PUT", body: { docstatus: 1 } });
     },
 
-    /** Cancelling leaves the voucher in place at docstatus 2 — the register
-     *  keeps showing it, the reports stop counting it. */
-    cancelVoucher: function (name) {
+    /** Delete, including after submit.
+     *
+     *  Frappe refuses outright: "Submitted Record cannot be deleted. You must
+     *  Cancel it first." So a submitted voucher is cancelled and then deleted,
+     *  two calls behind the one button. Cancelling alone would leave a
+     *  docstatus-2 row behind, which is exactly the withdrawn-document state
+     *  this app does not want.
+     */
+    deleteVoucher: function (name, submitted) {
+      var path = "/api/resource/Cash Voucher/" + encodeURIComponent(name);
+      var drop = function () { return api(path, { method: "DELETE" }); };
+      if (!submitted) return drop();
       return api("/api/method/frappe.client.cancel", {
         method: "POST",
         body: { doctype: "Cash Voucher", name: name }
-      });
+      }).then(drop);
     },
 
     saveDay: function (d) {
@@ -254,13 +258,15 @@
  * Optional:   saveVoucher(entry)            create, or update when
  *                                           entry.serverSaved is set
  *             submitVoucher(name)           draft -> submitted
- *             cancelVoucher(name)           submitted -> cancelled
+ *             deleteVoucher(name, submitted)  removes it, cancelling first
+ *                                           when Frappe demands it
  *             saveDay(day)
  *             saveRoster({people, approvers, payees, accounts})
  *
  * Each optional call is made behind a feature check, so an adapter may
  * implement as few as it likes; the browser copy of the books stays correct
- * either way. A voucher carries `status` ("Draft" | "Submitted" | "Cancelled")
- * and `amended_from`; only Submitted vouchers reach the daybook, the monthly
- * reports and the Tally export.
+ * either way. A voucher carries `status` ("Draft" | "Submitted"); only
+ * Submitted vouchers reach the daybook, the monthly reports and the Tally
+ * export. There is no cancel and no amendment: a wrong voucher is deleted and
+ * written again.
  * ------------------------------------------------------------------------- */
