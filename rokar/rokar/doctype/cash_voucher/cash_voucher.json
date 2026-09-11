@@ -47,10 +47,9 @@
   },
   {
    "fieldname": "debited_account",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Debited A/c",
-   "options": "Rokar Account",
    "reqd": 1
   },
   {
@@ -74,10 +73,9 @@
   },
   {
    "fieldname": "payee",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Paid to Mr./Mrs./M/s",
-   "options": "Rokar Payee",
    "reqd": 1
   },
   {
@@ -129,18 +127,16 @@
   },
   {
    "fieldname": "spent_by",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Accountant / spent by",
-   "options": "Rokar Person",
    "reqd": 1
   },
   {
    "depends_on": "eval:doc.unit!='Construction'",
    "description": "Construction vouchers are signed by the contractor instead.",
    "fieldname": "passed_by",
-   "fieldtype": "Link",
-   "label": "Passed by",
-   "options": "Rokar Person"
+   "fieldtype": "Data",
+   "label": "Passed by"
   },
   {
    "fieldname": "cb1",

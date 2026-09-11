@@ -10,7 +10,13 @@
   "place",
   "cb0",
   "opening_cash_balance",
-  "bank_label"
+  "bank_label",
+  "sb_roster",
+  "accountants",
+  "approvers",
+  "cb_roster",
+  "payees",
+  "accounts"
  ],
  "fields": [
   {
@@ -55,6 +61,42 @@
    "fieldname": "bank_label",
    "fieldtype": "Data",
    "label": "Bank label"
+  },
+  {
+   "fieldname": "sb_roster",
+   "fieldtype": "Section Break",
+   "label": "Roster"
+  },
+  {
+   "fieldname": "accountants",
+   "fieldtype": "Small Text",
+   "label": "Accountants",
+   "description": "One name per line. Signs each voucher as Accountant.",
+   "default": "Accountant"
+  },
+  {
+   "fieldname": "approvers",
+   "fieldtype": "Small Text",
+   "label": "Approvers",
+   "description": "One name per line. Passes the voucher.",
+   "default": "Approver 1\nApprover 2"
+  },
+  {
+   "fieldname": "cb_roster",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payees",
+   "fieldtype": "Small Text",
+   "label": "Payees",
+   "description": "One per line. Vendors, contractors and people paid.",
+   "default": "Local vegetable market"
+  },
+  {
+   "fieldname": "accounts",
+   "fieldtype": "Small Text",
+   "label": "Debited accounts",
+   "description": "One per line. Offered on the voucher's Debited A/c field."
   }
  ],
  "issingle": 1,

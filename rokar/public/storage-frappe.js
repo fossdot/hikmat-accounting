@@ -43,6 +43,13 @@
     });
   }
 
+  /* The roster lives on Rokar Settings as one name per line, so the app needs no
+     document per person. Blank lines and stray spaces are forgiven. */
+  function lines(text) {
+    return String(text || "").split("\n").map(function (x) { return x.trim(); })
+                             .filter(function (x) { return x.length; });
+  }
+
   var FIELDS = [
     "name", "posting_date", "unit", "debited_account", "cost_head",
     "payee", "address", "particulars", "amount", "spent_by", "passed_by",
@@ -121,6 +128,10 @@
             };
           });
           out.openingSeed = settings.opening_cash_balance || 0;
+          out.people = lines(settings.accountants);
+          out.approvers = lines(settings.approvers);
+          out.payees = lines(settings.payees);
+          out.accounts = lines(settings.accounts);
           return JSON.stringify(out);
         });
       });
@@ -194,28 +205,19 @@
         });
     },
 
-    /** Masters, so "+ add new" creates a real record other screens can link to. */
-    addMaster: function (doctype, title, extra) {
-      var body = { title: title };
-      if (extra) Object.keys(extra).forEach(function (k) { body[k] = extra[k]; });
-      return api("/api/resource/" + encodeURIComponent(doctype), { method: "POST", body: body });
-    },
-
-    /** Rokar Person and Rokar Payee are named by their title, so correcting a
-     *  spelling is a document rename. Frappe then repoints every voucher that
-     *  links to it, which is why the app can safely rewrite its own copies. */
-    renameMaster: function (doctype, from, to) {
-      return api("/api/method/frappe.client.rename_doc", {
-        method: "POST",
-        body: { doctype: doctype, old_name: from, new_name: to }
+    /** The whole roster in one write. Adding, renaming and removing a name are
+     *  each just a different list, so there is nothing per-name to create or
+     *  rename, and no link left dangling. */
+    saveRoster: function (roster) {
+      return api("/api/resource/Rokar Settings/Rokar Settings", {
+        method: "PUT",
+        body: {
+          accountants: (roster.people || []).join("\n"),
+          approvers: (roster.approvers || []).join("\n"),
+          payees: (roster.payees || []).join("\n"),
+          accounts: (roster.accounts || []).join("\n")
+        }
       });
-    },
-
-    /** Only ever called for a name no voucher refers to — app.js refuses the
-     *  removal otherwise — so Frappe's link check should not fire. */
-    removeMaster: function (doctype, name) {
-      return api("/api/resource/" + encodeURIComponent(doctype) + "/" + encodeURIComponent(name),
-                 { method: "DELETE" });
     },
 
     /* The blob interface app.js currently calls. Frappe saves per document, so
@@ -236,9 +238,7 @@
  *             submitVoucher(name)           draft -> submitted
  *             cancelVoucher(name)           submitted -> cancelled
  *             saveDay(day)
- *             addMaster(doctype, title)
- *             renameMaster(doctype, a, b)
- *             removeMaster(doctype, name)
+ *             saveRoster({people, approvers, payees, accounts})
  *
  * Each optional call is made behind a feature check, so an adapter may
  * implement as few as it likes; the browser copy of the books stays correct

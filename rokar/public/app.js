@@ -482,6 +482,19 @@ function suggestAccount(cat){
   if(isDefault) f.value=DEFAULT_ACCOUNTS[cat]||"";
   f.placeholder=cat==="Construction"?"e.g. Science Block Floor-3 Construction A/c":(DEFAULT_ACCOUNTS[cat]||"");
 }
+/* The roster is four lists on Rokar Settings, not a document per name, so any
+   change writes the whole thing back. The browser build keeps it in the saved
+   blob and needs nothing here. */
+function persistRoster(){
+  if(!Storage.saveRoster) return;
+  Storage.saveRoster({people:S.people,approvers:S.approvers,
+                      payees:S.payees,accounts:S.accounts})
+    .catch(function(err){
+      setBanner("info","Roster not saved to the server",
+                ((err&&err.message)||"unknown error")+
+                " \u2014 the change is held in this browser only.");
+    });
+}
 function fillPeople(){
   [["#f-by",S.people],["#f-appr",S.approvers],["#f-payee",S.payees]].forEach(function(p){
     var sel=$(p[0]), was=sel.value;
@@ -498,10 +511,7 @@ function addPerson(key,sel,label,hindi){
     var exists=S[key].filter(function(x){return x.toLowerCase()===nm.toLowerCase();})[0];
     if(exists) nm=exists; else { S[key].push(nm); S[key].sort(); }
     fillPeople(); $(sel).value=nm; persist(); renderSlip();
-    if(Storage.addMaster){
-      var dt={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
-      if(dt) Storage.addMaster(dt,nm).catch(function(){ /* already exists: harmless */ });
-    }
+    persistRoster();
   });
 }
 
@@ -529,10 +539,7 @@ function removeName(key,sel,field,cur,used){
        yes:"Remove",yesHindi:"\u0939\u091f\u093e\u090f\u0901",danger:true},function(){
     S[key]=S[key].filter(function(x){return x!==cur;});
     fillPeople(); persist(); renderSlip();
-    if(Storage.removeMaster){
-      var dtd={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
-      if(dtd) Storage.removeMaster(dtd,cur).catch(function(){ /* server keeps it: harmless */ });
-    }
+    persistRoster();
   });
 }
 
@@ -561,10 +568,7 @@ function managePerson(key,sel,field){
   var moved=0;
   S.entries.forEach(function(e){ if(e[field]===cur){ e[field]=nm; moved++; } });
   fillPeople(); $(sel).value=nm; persist(); renderAll();
-  if(Storage.renameMaster){
-    var dtr={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
-    if(dtr) Storage.renameMaster(dtr,cur,nm).catch(function(){ /* server keeps it: harmless */ });
-  }
+  persistRoster();
   if(moved) note("Renamed, and carried onto "+moved+" saved voucher"+(moved===1?"":"s")+".");
   });
 }
@@ -982,7 +986,7 @@ function addVoucher(ev){
     S.entries.push(d);
   }
   amendBase=null; editingId=d.id;
-  if(d.account && S.accounts.indexOf(d.account)<0) S.accounts.push(d.account);
+  if(d.account && S.accounts.indexOf(d.account)<0){ S.accounts.push(d.account); persistRoster(); }
   d.items.forEach(function(it){
     if(it.particulars && S.particulars.indexOf(it.particulars)<0) S.particulars.unshift(it.particulars);
   });

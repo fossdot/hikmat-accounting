@@ -55,7 +55,9 @@ and opening cash balance.
 ### Two frontends, one app
 
 `rokar/www/rokar/` serves the cash book from the site, backed by the Cash
-Voucher, Daybook Day and Rokar master doctypes.
+Voucher and Daybook Day doctypes. The roster — accountants, approvers, payees
+and debited accounts — lives on `Rokar Settings` as one name per line, so there
+is no document per person to create, rename or leave dangling.
 
 The same interface also runs as a static page with no server at all, keeping the
 books in `localStorage` — useful where connectivity is unreliable. `app.js` is
@@ -66,8 +68,8 @@ adapter-agnostic: `storage.js` keeps the books in the browser,
 
 The roster and sample vouchers in `app.js` are placeholders. Real staff,
 trustee, vendor and payee names are entered in the app itself — the `+` and
-pencil buttons beside each list — and are kept in the browser or on the site,
-never in this repository.
+pencil buttons beside each list — and are kept in the browser, or on the site in
+`Rokar Settings`. They are never in this repository.
 
 ### Contributing
 
