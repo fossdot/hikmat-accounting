@@ -14,7 +14,7 @@ var DEFAULT_PEOPLE=["Accountant"];
 var DEFAULT_APPROVERS=["Approver 1","Approver 2","Approver 3","Approver 4"];
 var ROSTER_VERSION=2;   /* bump when the standing roster changes; see applyLoaded */
 var DEFAULT_PAYEES=["Local vegetable market"];   /* generic on purpose */
-var DEFAULT_ACCOUNTS={School:"School EXP",Residence:"Residence EXP",STL:"STL A/c",Construction:"Construction A/c"};
+var DEFAULT_ACCOUNTS={School:"School EXP",Residence:"Residence EXP",STL:"School To Livelihood A/c",Construction:"Construction A/c"};
 /* On a Frappe site these come from Rokar Settings, injected by the page; the
    standalone build falls back to the school it was written for. */
 var BOOT=window.rokarBoot||{};
@@ -207,8 +207,8 @@ function seed(){
     ["School EXP","Electrical shop","Lauriya","Classroom fan repairing 6 pcs",500,"School","Program Delivery","Accountant"],
     ["School EXP","Petrol pump","Ramnagar","Petrol refilling - school bus",1200,"School","Program Delivery","Accountant"],
     ["School EXP","Stationery shop","Bettiah","A4 paper 1 packet, printer ink",995,"School","Beneficiary Support","Accountant"],
-    ["STL A/c","Form processing agent","Mathiya","Scholarship form processing - 9 students",450,"STL","Beneficiary Support","Accountant"],
-    ["STL A/c","Travel agent","Meghwal","Emergency travel - district office",380,"STL","Contingency","Accountant"],
+    ["School To Livelihood A/c","Form processing agent","Mathiya","Scholarship form processing - 9 students",450,"STL","Beneficiary Support","Accountant"],
+    ["School To Livelihood A/c","Travel agent","Meghwal","Emergency travel - district office",380,"STL","Contingency","Accountant"],
     ["Science Block Floor-3 Construction A/c","Building contractor","Lauriya","Payment of Mobilization Advance",50000,"Construction","Program Delivery","Accountant"]
   ];
   var dayOf=[day-2,day-2,day-1,day-1,day,day,day,day-1,day];
