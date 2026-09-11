@@ -102,12 +102,24 @@ function dialogOpen(o,then,kind){
   askExtraThen=(o.extra&&o.extra.then)||null;
   ex.hidden=!o.extra;
   if(o.extra){
-    ex.className="btn"+(o.extra.danger?" danger":" ghost");
+    var label=o.extra.label||"Remove";
     ex.innerHTML="";
-    ex.appendChild(document.createTextNode(o.extra.label||"Remove"));
-    if(o.extra.hindi){
-      ex.appendChild(document.createTextNode(" "));
-      ex.appendChild(el("span","hi",o.extra.hindi));
+    if(o.extra.icon&&ICONS[o.extra.icon]){
+      /* A glyph, not a word: the destructive action should read at a glance and
+         not sit next to Save looking like another button to press. */
+      ex.className="ibtn"+(o.extra.danger?" danger":"");
+      ex.innerHTML=ICONS[o.extra.icon];
+      ex.title=label+(o.extra.hindi?" \u00b7 "+o.extra.hindi:"");
+      ex.setAttribute("aria-label",label);
+    } else {
+      ex.className="btn"+(o.extra.danger?" danger":" ghost");
+      ex.removeAttribute("title");
+      ex.setAttribute("aria-label",label);
+      ex.appendChild(document.createTextNode(label));
+      if(o.extra.hindi){
+        ex.appendChild(document.createTextNode(" "));
+        ex.appendChild(el("span","hi",o.extra.hindi));
+      }
     }
   }
 
@@ -555,7 +567,7 @@ function managePerson(key,sel,field){
            noteHindi:used?"नाम बदलने पर वाउचर अपने आप बदल जाएँगे।"
                          :"या इसे सूची से हटा दें।",
            value:cur,yes:"Save",yesHindi:"सहेजें",
-           extra:{label:"Remove",hindi:"हटाएँ",danger:true,
+           extra:{icon:"del",label:"Remove",hindi:"हटाएँ",danger:true,
                   then:function(){ removeName(key,sel,field,cur,used); }}},
     function(raw){
   var nm=(raw||"").trim();

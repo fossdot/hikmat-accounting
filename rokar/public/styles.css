@@ -143,6 +143,8 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
 .ibtn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.35;
           stroke-linecap:round;stroke-linejoin:round}
 .ibtn:hover{color:var(--accent-ink);background:var(--accent-soft);border-color:var(--accent)}
+.ibtn.danger{color:var(--bad)}
+.ibtn.danger:hover{color:var(--bad);background:var(--bad-soft);border-color:var(--bad)}
 .ibtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* ---------- daybook ---------- */
@@ -269,6 +271,8 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
 .ask .ask-btns{margin-top:18px;justify-content:flex-end}
 /* the destructive action sits apart from Save, at the far left */
 #ask-extra{margin-right:auto}
+#ask-extra.ibtn{padding:7px;border-color:var(--line)}
+#ask-extra.ibtn svg{width:17px;height:17px}
 #ask-extra[hidden]{display:none}
 .ask .btn .hi{font-size:11.5px;font-weight:400;opacity:.75}
 .btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
