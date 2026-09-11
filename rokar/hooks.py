@@ -5,6 +5,12 @@ app_description = "Cash voucher, daybook and cost-head reports for Hikmat Founda
 app_email = "vishal@fossunited.org"
 app_license = "mit"
 
+# Exported and re-imported with the app. Filtered, or `bench export-fixtures`
+# would overwrite this file with every Role on the site.
+fixtures = [
+	{"dt": "Role", "filters": [["name", "in", ["Rokar Clerk", "Rokar Auditor"]]]},
+]
+
 # Apps
 # ------------------
 

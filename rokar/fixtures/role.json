@@ -1,14 +1,14 @@
 [
  {
   "doctype": "Role",
+  "name": "Rokar Clerk",
   "role_name": "Rokar Clerk",
-  "desk_access": 1,
-  "__islocal": 1
+  "desk_access": 1
  },
  {
   "doctype": "Role",
+  "name": "Rokar Auditor",
   "role_name": "Rokar Auditor",
-  "desk_access": 1,
-  "__islocal": 1
+  "desk_access": 1
  }
 ]
