@@ -57,8 +57,8 @@ function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAl
      note(o[, fn])   something to read
 
    All three return immediately; the work belongs in the callback. */
-var askThen=null;
-function dialogHide(){ $("#ask").hidden=true; askThen=null; }
+var askThen=null, askExtraThen=null;
+function dialogHide(){ $("#ask").hidden=true; askThen=null; askExtraThen=null; }
 function dialogOpen(o,then,kind){
   if(typeof o==="string") o={title:o};
   askThen=then||null;
@@ -93,6 +93,20 @@ function dialogOpen(o,then,kind){
     yes.appendChild(document.createTextNode(" "));
     yes.appendChild(el("span","hi",o.yesHindi||"\u0920\u0940\u0915"));
   }
+  /* An optional third action, kept away from Save because it destroys something. */
+  var ex=$("#ask-extra");
+  askExtraThen=(o.extra&&o.extra.then)||null;
+  ex.hidden=!o.extra;
+  if(o.extra){
+    ex.className="btn"+(o.extra.danger?" danger":" ghost");
+    ex.innerHTML="";
+    ex.appendChild(document.createTextNode(o.extra.label||"Remove"));
+    if(o.extra.hindi){
+      ex.appendChild(document.createTextNode(" "));
+      ex.appendChild(el("span","hi",o.extra.hindi));
+    }
+  }
+
   var no=$("#ask-no");
   no.hidden=(kind==="note");
   if(!no.hidden){
@@ -327,6 +341,9 @@ function buildStatic(){
 
   $("#ask-yes").addEventListener("click",dialogAccept);
   $("#ask-no").addEventListener("click",dialogHide);
+  $("#ask-extra").addEventListener("click",function(){
+    var f=askExtraThen; dialogHide(); if(f) f();
+  });
   /* clicking the backdrop, never the panel itself, dismisses */
   $("#ask").addEventListener("click",function(ev){ if(ev.target===$("#ask")) dialogHide(); });
   document.addEventListener("keydown",function(ev){
@@ -484,41 +501,50 @@ function addPerson(key,sel,label,hindi){
    split one person across two rows of the monthly report. A removal is refused
    while any voucher still names the person: dropping it would leave those
    vouchers pointing at a name the roster no longer knows. Rename instead. */
+/* Takes a name off its list, refusing while any voucher still carries it:
+   dropping it then would leave those vouchers pointing at a name the roster no
+   longer knows. */
+function removeName(key,sel,field,cur,used){
+  if(used){
+    note({title:"\u201c"+cur+"\u201d stays on the list.",
+          hindi:"यह नाम सूची में रहेगा।",
+          note:used+" voucher"+(used===1?"":"s")+" still name"+(used===1?"s":"")+
+               " it. Rename it instead, and the vouchers follow.",
+          noteHindi:"इसे हटाया नहीं जा सकता। नाम बदलें — वाउचर अपने आप बदल जाएँगे।"});
+    return;
+  }
+  ask({title:"Remove \u201c"+cur+"\u201d from the list?",
+         hindi:"\u0907\u0938 \u0928\u093e\u092e \u0915\u094b \u0938\u0942\u091a\u0940 \u0938\u0947 \u0939\u091f\u093e\u090f\u0901?",
+         note:"No voucher names it, so nothing in the books changes.",
+         noteHindi:"\u0915\u093f\u0938\u0940 \u0935\u093e\u0909\u091a\u0930 \u092e\u0947\u0902 \u0928\u0939\u0940\u0902 \u0939\u0948, \u0907\u0938\u0932\u093f\u090f \u092c\u0939\u0940 \u092e\u0947\u0902 \u0915\u094b\u0908 \u092c\u0926\u0932\u093e\u0935 \u0928\u0939\u0940\u0902\u0964",
+       yes:"Remove",yesHindi:"\u0939\u091f\u093e\u090f\u0901",danger:true},function(){
+    S[key]=S[key].filter(function(x){return x!==cur;});
+    fillPeople(); persist(); renderSlip();
+    if(Storage.removeMaster){
+      var dtd={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
+      if(dtd) Storage.removeMaster(dtd,cur).catch(function(){ /* server keeps it: harmless */ });
+    }
+  });
+}
+
 function managePerson(key,sel,field){
   var cur=$(sel).value;
   if(!cur){ note("Pick a name in the list first."); return; }
   var used=S.entries.filter(function(e){return e[field]===cur;}).length;
   askText({title:"Rename \u201c"+cur+"\u201d",
            hindi:"नाम बदलें",
-           note:"Clear the box to remove it from the list."+
-                (used?" It is named on "+used+" saved voucher"+(used===1?"":"s")+
-                      ", and a rename carries onto all of them.":""),
-           noteHindi:"सूची से हटाने के लिए बॉक्स खाली कर दें।",
-           value:cur,yes:"Save",yesHindi:"सहेजें"},function(raw){
+           note:used?("It is named on "+used+" saved voucher"+(used===1?"":"s")+
+                      ", and a rename carries onto all of them.")
+                    :"Or remove it from the list altogether.",
+           noteHindi:used?"नाम बदलने पर वाउचर अपने आप बदल जाएँगे।"
+                         :"या इसे सूची से हटा दें।",
+           value:cur,yes:"Save",yesHindi:"सहेजें",
+           extra:{label:"Remove",hindi:"हटाएँ",danger:true,
+                  then:function(){ removeName(key,sel,field,cur,used); }}},
+    function(raw){
   var nm=(raw||"").trim();
 
-  if(!nm){
-    if(used){
-      note("\u201c"+cur+"\u201d stays: "+used+" voucher"+(used===1?"":"s")+" still name"+
-            (used===1?"s":"")+" it. Rename it instead, and the vouchers follow.");
-      return;
-    }
-    ask({title:"Remove \u201c"+cur+"\u201d from the list?",
-         hindi:"\u0907\u0938 \u0928\u093e\u092e \u0915\u094b \u0938\u0942\u091a\u0940 \u0938\u0947 \u0939\u091f\u093e\u090f\u0901?",
-         note:"No voucher names it, so nothing in the books changes.",
-         noteHindi:"\u0915\u093f\u0938\u0940 \u0935\u093e\u0909\u091a\u0930 \u092e\u0947\u0902 \u0928\u0939\u0940\u0902 \u0939\u0948, \u0907\u0938\u0932\u093f\u090f \u092c\u0939\u0940 \u092e\u0947\u0902 \u0915\u094b\u0908 \u092c\u0926\u0932\u093e\u0935 \u0928\u0939\u0940\u0902\u0964",
-         yes:"Remove",yesHindi:"\u0939\u091f\u093e\u090f\u0901",danger:true},function(){
-      S[key]=S[key].filter(function(x){return x!==cur;});
-      fillPeople(); persist(); renderSlip();
-      if(Storage.removeMaster){
-        var dtd={people:"Rokar Person",approvers:"Rokar Person",payees:"Rokar Payee"}[key];
-        if(dtd) Storage.removeMaster(dtd,cur).catch(function(){ /* server keeps it: harmless */ });
-      }
-    });
-    return;
-  }
-
-  if(nm===cur) return;
+  if(!nm||nm===cur) return;
   var clash=S[key].filter(function(x){return x.toLowerCase()===nm.toLowerCase()&&x!==cur;})[0];
   if(clash){ note("\u201c"+clash+"\u201d is already on the list."); return; }
 

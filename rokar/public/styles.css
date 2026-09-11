@@ -264,6 +264,9 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
 #ask-choices .amt{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
 #ask-input[hidden]{display:none}
 .ask .ask-btns{margin-top:18px;justify-content:flex-end}
+/* the destructive action sits apart from Save, at the far left */
+#ask-extra{margin-right:auto}
+#ask-extra[hidden]{display:none}
 .ask .btn .hi{font-size:11.5px;font-weight:400;opacity:.75}
 .btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
 
