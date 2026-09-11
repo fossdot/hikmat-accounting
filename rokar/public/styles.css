@@ -102,7 +102,7 @@ input[type=number],.amt{font-family:var(--mono);font-variant-numeric:tabular-num
 .headnote{font-size:11px;color:var(--faint);margin-top:2px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
 .words{font-size:12px;color:var(--accent-ink);background:var(--accent-soft);border-radius:4px;padding:6px 9px;min-height:29px;font-style:italic}
-.btn{background:var(--accent);color:var(--on-accent);border:1px solid var(--accent);border-radius:4px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13.5px}
+.btn{background:var(--accent);color:var(--on-accent);border:1px solid var(--accent);border-radius:4px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13.5px;white-space:nowrap}
 .btn:hover{filter:brightness(1.08)}
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-strong);font-weight:500}
 .btn.ghost:hover{background:var(--surface-2);filter:none}
@@ -223,14 +223,40 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
 .slip .vt .wordrow .w{flex:1;min-width:0}
 .slip .vt .wordrow .tl{flex:none;white-space:nowrap;font-weight:700;padding-right:8px}
 .slip .vt .grand{font-weight:700;font-size:14px}
-.slip .sigs,.daysheet .sigs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:26px}
+.slip .sigs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:18px}
 .slip .sigs.two{grid-template-columns:1fr 1fr;gap:40px}
-.slip .sig,.daysheet .sig{text-align:center}
-.slip .sig .nm,.daysheet .sig .nm{font-family:"IBM Plex Sans",Arial,sans-serif;font-size:12.5px;min-height:17px;
+.slip .sig{text-align:center}
+/* The name is printed at the top of the box and the rule is at the bottom of
+   it, so the blank between the two is where the signature goes. */
+.slip .sig .nm{font-family:"IBM Plex Sans",Arial,sans-serif;font-size:12.5px;min-height:38px;
                border-bottom:1px solid var(--line-strong);padding-bottom:2px;margin-bottom:4px}
-.slip .sig .lb,.daysheet .sig .lb{font-weight:700;font-size:11px}
-.slip .sig:last-child .lb,.daysheet .sig:last-child .lb{text-align:right}
-.slip .sig:first-child .lb,.daysheet .sig:first-child .lb{text-align:left}
+.slip .sig .lb{font-weight:700;font-size:11px}
+.slip .sig:last-child .lb{text-align:right}
+.slip .sig:first-child .lb{text-align:left}
+.foot{max-width:1240px;margin:0 auto;padding:0 var(--gut) 40px;font-size:11.5px;color:var(--faint)}
+
+/* ---------- sign-in card ----------
+   The staff who keep this book never meet the Frappe login page: a session
+   that has not signed in gets this, under the school's own name and emblem.
+   It is a real login -- the card posts to Frappe and takes back a session. */
+.gate{min-height:78vh;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.gate-card{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r);
+           box-shadow:0 14px 44px rgba(0,0,0,.12);padding:30px 30px 24px;width:100%;max-width:380px;
+           text-align:center}
+.gate-logo{width:62px;height:62px;object-fit:contain;margin-bottom:12px}
+.gate-card h1{font-size:20px;line-height:1.25}
+.gate-sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+.gate-card label{display:block;text-align:left;font-size:12px;font-weight:600;
+                 margin:16px 0 5px;color:var(--muted)}
+.gate-card label .hi{font-family:"IBM Plex Sans Devanagari","IBM Plex Sans",sans-serif;
+                     font-weight:400;opacity:.8;margin-left:5px}
+.gate-card input{width:100%}
+.gate-card .btn{width:100%;margin-top:20px;padding:11px 16px}
+.gate-card .btn[disabled]{opacity:.6;cursor:default}
+.gate-err{margin-top:14px;font-size:12.5px;color:var(--bad);text-align:left;line-height:1.45}
+.gate-err[hidden]{display:none}
+.gate-foot{margin-top:16px;font-size:11px;color:var(--faint);line-height:1.5}
+.gate-foot .hi{font-family:"IBM Plex Sans Devanagari","IBM Plex Sans",sans-serif}
 #printarea{display:none}
 @media print{
   /* A5, and no page margin at all: with no margin left to draw in, Chrome and
@@ -247,8 +273,6 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
   #printarea .slip .fv,#printarea .slip table.vt th,#printarea .slip table.vt td{border-color:#000}
   #printarea .slip .sig .nm{border-bottom-color:#666}
 }
-.foot{max-width:1240px;margin:0 auto;padding:0 var(--gut) 40px;font-size:11.5px;color:var(--faint)}
-.foot code{font-family:var(--mono);font-size:11px}
 
 /* ---------- confirmation dialog ----------
    The actions that move money need a question the clerk can actually read, so
@@ -284,7 +308,6 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
 .daysheet{background:#fff;color:var(--ink)}
 .daysheet .dtitle1{text-align:center;font-weight:700;font-size:17px;letter-spacing:.02em}
 .daysheet .dtitle2{text-align:center;font-weight:700;font-size:12.5px;margin:2px 0 10px}
-.daysheet .sigs{margin-top:14px}
 .daysheet .dstack > table.dt{margin-bottom:9px}
 .daysheet table.dt .subhead td{font-weight:700;background:var(--surface-2)}
 .daysheet .dcols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}

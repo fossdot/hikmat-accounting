@@ -162,6 +162,12 @@ function iso(d){var p=function(x){return String(x).padStart(2,"0");}; return d.g
 function todayISO(){return iso(new Date());}
 function ym(d){return (d||"").slice(0,7);}
 function dmy(d){if(!d)return ""; var a=d.split("-"); return a[2]+"-"+a[1]+"-"+a[0];}
+/* The foundation names its files by month and year: report_09_26_All. */
+function mmyy(mk){ var a=String(mk||"").split("-"); return a[1]+"_"+yy(Number(a[0])); }
+function reportName(mk,units){
+  var all=!units||!units.length||units.length>=CATS.length;
+  return "report_"+mmyy(mk)+"_"+(all?"All":units.join("_"));
+}
 function monthLabel(k){
   if(!k) return "";
   var M=["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -285,9 +291,11 @@ function applyLoaded(raw){
              if(p.particulars) S.particulars=p.particulars;
              if(p.given) S.given=p.given;
              if(p.series) S.series=p.series;
-             /* The standing roster is set by the foundation, not by the browser:
-                an older save keeps its payees but takes the current staff list. */
-             if(n(p.rosterVersion)<ROSTER_VERSION){
+             /* A browser copy written before the roster changed keeps its
+                payees but takes the current staff list. The site is a different
+                matter: Rokar Settings *is* the roster, so whatever it returns
+                stands -- resetting it here wiped the names on every refresh. */
+             if(Storage.mode!=="frappe"&&n(p.rosterVersion)<ROSTER_VERSION){
                S.people=DEFAULT_PEOPLE.slice(); S.approvers=DEFAULT_APPROVERS.slice();
              } }
   }catch(e){}
@@ -336,7 +344,12 @@ function buildStatic(){
   $("#vform").addEventListener("submit",addVoucher);
   $("#v-clear").addEventListener("click",resetForm);
   $("#btn-print").addEventListener("click",function(){
-    $("#printarea").innerHTML=$("#slip").outerHTML; setPageSize("A5 landscape"); window.print();
+    $("#printarea").innerHTML=$("#slip").outerHTML;
+    setPageSize("A5 landscape");
+    /* The preview's own number: the draft's if one is open, otherwise the
+       number this voucher will take when it is saved. */
+    var cur=editingId?entryById(editingId):null;
+    printAs(cur?cur.no:nextNo($("#f-date").value));
   });
   $("#r-month").addEventListener("change",renderRegister);
   $("#r-cat").addEventListener("change",renderRegister);
@@ -801,24 +814,34 @@ function printDay(){
 
   box.appendChild(cols);
 
-  var sg=el("div","sigs");
-  [["","Accountant"],["","Passed by"],["","Verified by"]].forEach(function(pr){
-    var b=el("div","sig");
-    b.appendChild(el("div","nm",pr[0]));
-    b.appendChild(el("div","lb",pr[1]));
-    sg.appendChild(b);
-  });
-  box.appendChild(sg);
-
   var pa=$("#printarea"); pa.innerHTML=""; pa.appendChild(box);
   setPageSize("A4 landscape");
-  window.print();
+  printAs("daybook_"+dmy(dt).replace(/-/g,"_"));
 }
 
 
-/* Prints a saved voucher \u2014 including one amended after it was first issued.
-   The browser's print dialog is also the way to keep a PDF copy: choose
-   "Save as PDF" as the destination. */
+/* "Save as PDF" names the file after the document title, which is otherwise
+   the app's own -- every voucher and every day sheet would land as
+   "Rokar - Cash Book & Voucher Register.pdf". So the title carries the
+   document's own name for as long as the dialog is up. afterprint puts it
+   back; the timer is there for the browser that never fires it. */
+function fileStem(x){ return String(x||"").replace(/[\/\\:*?"<>|]+/g,"-"); }
+function printAs(name){
+  /* Restored to the app's own title rather than to whatever the title held a
+     moment ago: two prints in quick succession would otherwise hand each
+     other a document name to put back. */
+  function restore(){
+    document.title=TITLE;
+    window.removeEventListener("afterprint",restore);
+  }
+  document.title=fileStem(name);
+  window.addEventListener("afterprint",restore);
+  window.print();
+  setTimeout(restore,4000);
+}
+
+/* Prints a saved voucher. The browser's print dialog is also the way to keep a
+   PDF copy: choose "Save as PDF" as the destination. */
 function printEntry(id){
   var e=entryById(id); if(!e) return;
   var d={date:e.date,payee:e.payee,items:itemsOf(e),amount:n(e.amount),
@@ -828,7 +851,7 @@ function printEntry(id){
   fillSlip(box,d,e.no);
   var pa=$("#printarea"); pa.innerHTML=""; pa.appendChild(box);
   setPageSize("A5 landscape");
-  window.print();
+  printAs(e.no);
 }
 
 /* ---------------- voucher ---------------- */
@@ -875,7 +898,7 @@ function renderSlip(){
   var d=formData(), cur=editingId?entryById(editingId):null;
   var no=cur?cur.no:nextNo(d.date);
   $("#next-no").textContent=(cur?"Draft: ":"Next: ")+no;
-  $("#f-total").textContent=inr(d.amount);
+  $("#f-total").textContent=rs(d.amount);
   $("#f-words").textContent=d.amount?words(d.amount):"\u2014";
   var s=$("#slip"); s.innerHTML="";
   fillSlip(s,d,no);
@@ -1395,7 +1418,11 @@ var UNIT_TITLE={School:"SCHOOL EXPENSES",
 /* One sheet per unit, laid out like the sheet the foundation already keeps: a
    banner, then Sl.No. / Date / Cost Head / Discription of Items / Amount /
    Exp By, then Total with the month's budget and what is left of it. Cost Head
-   appears for STL alone, which is the only unit that carries one. */
+   appears for STL alone, which is the only unit that carries one.
+
+   Exp By is who the money went to -- the vendor, contractor or person named on
+   the voucher -- not the accountant who wrote it. Every line would say
+   "Accountant" otherwise, which tells a reader nothing. */
 function writeMonth(mk,given,units){
   var spent=spentByUnit(mk);
   var wanted=(units&&units.length?units:CATS).filter(function(c){ return CATS.indexOf(c)>=0; });
@@ -1416,8 +1443,8 @@ function writeMonth(mk,given,units){
         itemsOf(e).forEach(function(it){
           sl++;
           rows.push(heads
-            ? [sl,dmy(e.date),e.head||"",it.particulars||"",n(it.amount),e.by||""]
-            : [sl,dmy(e.date),it.particulars||"",n(it.amount),e.by||""]);
+            ? [sl,dmy(e.date),e.head||"",it.particulars||"",n(it.amount),e.payee||""]
+            : [sl,dmy(e.date),it.particulars||"",n(it.amount),e.payee||""]);
         });
       });
 
@@ -1435,7 +1462,7 @@ function writeMonth(mk,given,units){
     note("The spreadsheet writer did not load \u2014 reload the page and try again.");
     return;
   }
-  offerBlob("expenses-"+label.replace(/ /g,"-")+".xlsx",RokarXlsx.build(sheets));
+  offerBlob(reportName(mk,wanted)+".xlsx",RokarXlsx.build(sheets));
 }
 
 /* ---------------- reports ---------------- */
@@ -1612,7 +1639,7 @@ function exportRegister(){
                    e.category,e.head,e.by,e.approved||"",it.amount,i===0?e.amount:""]);
       });
     });
-  offer("register-"+mk+".csv",csv(rows));
+  offer("register_"+mmyy(mk)+".csv",csv(rows));
 }
 function exportTally(){
   var mk=$("#r-month").value;
@@ -1627,7 +1654,7 @@ function exportTally(){
                    it.particulars+" \u2014 paid to "+e.payee+", by "+e.by]);
       });
     });
-  offer("tally-"+mk+".csv",csv(rows));
+  offer("tally_"+mmyy(mk)+".csv",csv(rows));
 }
 function exportDaybook(){
   var mk=ym($("#d-date").value);
@@ -1637,7 +1664,7 @@ function exportDaybook(){
     rows.push([dmy(k),d.opening,d.fee,d.bus,d.other,d.wdl,expensesOf(k),d.deposit,closingOf(k),d.upi,
                Object.keys(d.denoms||{}).length?counted:"",Object.keys(d.denoms||{}).length?counted-coll:""]);
   });
-  offer("daybook-"+mk+".csv",csv(rows));
+  offer("daybook_"+mmyy(mk)+".csv",csv(rows));
 }
 
 /* ---------------- render ---------------- */

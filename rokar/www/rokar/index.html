@@ -20,6 +20,29 @@
 {%- endblock -%}
 
 {% block page_content %}
+{% if guest %}
+{#- Nothing of the cash book is rendered for a session that has not signed in:
+    the page a stranger reaches is this card and no more. -#}
+<div class="gate">
+  <form class="gate-card" id="gate-form" autocomplete="on">
+    <img class="gate-logo" src="{{ logo }}" alt="">
+    <h1>{{ app_title }}</h1>
+    <p class="gate-sub">{{ school_name }}{% if place %} &middot; {{ place }}{% endif %}</p>
+
+    <label for="gate-user">Login name <span class="hi">लॉगिन नाम</span></label>
+    <input id="gate-user" name="username" autocomplete="username" autocapitalize="none"
+           autocorrect="off" spellcheck="false" required>
+
+    <label for="gate-pass">Password <span class="hi">पासवर्ड</span></label>
+    <input id="gate-pass" name="password" type="password" autocomplete="current-password" required>
+
+    <p class="gate-err" id="gate-err" hidden></p>
+    <button class="btn" type="submit" id="gate-go">Open the cash book</button>
+    <p class="gate-foot">Set by the foundation in Rokar Settings.<br>
+       <span class="hi">फ़ाउंडेशन द्वारा निर्धारित।</span></p>
+  </form>
+</div>
+{% else %}
 <div class="mast">
   <div class="mast-in">
     <img class="crest" id="mast-logo" alt="">
@@ -68,7 +91,7 @@
             <datalist id="particularsList"></datalist>
             <button type="button" class="btn ghost sm" id="add-item">+ Add line</button></div>
           <div class="field"><label>Total <span class="hi">कुल</span></label>
-            <div class="totalbox"><span class="lbl">Rupees</span><span class="num" id="f-total">0</span></div>
+            <div class="totalbox"><span class="lbl">Total</span><span class="num" id="f-total">₹0</span></div>
             <div class="words" id="f-words">—</div></div>
           <div class="field" id="f-headwrap" hidden><label>Cost head <span class="hi">व्यय शीर्ष</span></label>
             <div class="chipset" id="f-head"></div>
@@ -156,7 +179,7 @@
             <table class="denoms">
               <thead><tr><th>Note</th><th class="r">Qty</th><th class="r">Value</th></tr></thead>
               <tbody id="d-denoms"></tbody>
-              <tfoot><tr><td>Counted</td><td></td><td class="r num" id="d-dtot">0</td></tr></tfoot>
+              <tfoot><tr><td>Counted</td><td></td><td class="r num" id="d-dtot">₹0</td></tr></tfoot>
             </table>
             <div class="varbar ok" id="d-var"><span>Count matches collection</span><b>₹0</b></div>
             <p style="font-size:11.5px;color:var(--muted);margin:12px 0 0">Counts today's cash <em>collection</em> (fee + bus + other), not the full drawer. On 01‑09‑2026 the sheet recorded ₹5,000 collected against a ₹4,900 count — a gap like that is flagged here instead of passing through.</p>
@@ -228,11 +251,6 @@
   </section>
 </main>
 
-<div class="foot">
-  <p><b>Storage.</b> Books are held in this browser on this computer. Nothing is sent anywhere. Use <b>Backup</b> in the Reports tab at the end of every working day — the file it saves is the only copy that survives a cleared browser, a reinstall or a new machine. <b>Restore</b> reads that file back.</p>
-  <p><b>Scope.</b> A capture and reporting tool, not a double-entry ledger. Vouchers and daybook lines export as CSV for the CA to bring into Tally; it does not post journal entries itself.</p>
-</div>
-
 <div class="ask" id="ask" hidden>
   <div class="ask-card" role="dialog" aria-modal="true" aria-labelledby="ask-title">
     <h3 id="ask-title"></h3>
@@ -249,9 +267,60 @@
   </div>
 </div>
 <div id="printarea"></div>
+{% endif %}
 {% endblock %}
 
 {%- block script -%}
+{% if guest %}
+<script>
+  /* The sign-in card posts to Frappe's own login endpoint, so what comes back
+     is a real session cookie -- the password is never checked in the page.
+     Guest carries no CSRF token, but a signed-in session that landed here by
+     mistake does, and Frappe would reject the post without it. */
+  (function () {
+    var form = document.getElementById("gate-form");
+    var err = document.getElementById("gate-err");
+    var go = document.getElementById("gate-go");
+    var pass = document.getElementById("gate-pass");
+    function fail(message) {
+      err.textContent = message;
+      err.hidden = false;
+      go.disabled = false;
+      go.textContent = "Open the cash book";
+      pass.value = "";
+      pass.focus();
+    }
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      err.hidden = true;
+      go.disabled = true;
+      go.textContent = "Opening\u2026";
+      var headers = { "Content-Type": "application/json", Accept: "application/json" };
+      if (window.frappe && window.frappe.csrf_token) {
+        headers["X-Frappe-CSRF-Token"] = window.frappe.csrf_token;
+      }
+      fetch("/api/method/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: headers,
+        body: JSON.stringify({
+          usr: document.getElementById("gate-user").value.trim(),
+          pwd: pass.value
+        })
+      }).then(function (r) {
+        if (r.ok) { window.location.reload(); return; }
+        return r.json().then(function (j) {
+          fail((j && j.message) || "That name and password were not accepted.");
+        }, function () {
+          fail("That name and password were not accepted.");
+        });
+      }).catch(function () {
+        fail("Could not reach the server. Check the connection and try again.");
+      });
+    });
+  })();
+</script>
+{% else %}
 <script>
   /* One boot object, and no property name starting with a double underscore:
      Frappe refuses to render a template where a dot is followed by two
@@ -270,4 +339,5 @@
 <script src="/assets/rokar/storage-frappe.js?v={{ asset_v }}"></script>
 <script src="/assets/rokar/xlsx.js?v={{ asset_v }}"></script>
 <script src="/assets/rokar/app.js?v={{ asset_v }}"></script>
+{% endif %}
 {%- endblock -%}
