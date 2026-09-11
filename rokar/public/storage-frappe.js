@@ -196,10 +196,14 @@
       var path = "/api/resource/Cash Voucher/" + encodeURIComponent(name);
       var drop = function () { return api(path, { method: "DELETE" }); };
       if (!submitted) return drop();
+      /* Delete either way. A voucher cancelled by an older build of this app,
+         or from the desk, cannot be cancelled twice -- but the delete is still
+         what was asked for, so that refusal must not stop it. Only a failed
+         DELETE is worth reporting. */
       return api("/api/method/frappe.client.cancel", {
         method: "POST",
         body: { doctype: "Cash Voucher", name: name }
-      }).then(drop);
+      }).then(drop, drop);
     },
 
     saveDay: function (d) {
