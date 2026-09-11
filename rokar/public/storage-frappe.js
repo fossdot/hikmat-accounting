@@ -44,9 +44,9 @@
   }
 
   var FIELDS = [
-    "name", "posting_date", "unit", "debited_account", "cost_head", "mode",
+    "name", "posting_date", "unit", "debited_account", "cost_head",
     "payee", "address", "particulars", "amount", "spent_by", "passed_by",
-    "docstatus", "amended_from", "paid_from"
+    "docstatus", "amended_from"
   ];
 
   /* Frappe's docstatus is the lifecycle app.js works in: 0 draft, 1 submitted,
@@ -101,9 +101,6 @@
                 return { particulars: r.particulars, amount: r.amount };
               }),
               by: v.spent_by, approved: v.passed_by || "",
-              mode: (v.mode || "Cash").toLowerCase().indexOf("upi") === 0 ? "upi"
-                  : (v.mode || "").toLowerCase().indexOf("bank") === 0 ? "bank" : "cash",
-              src: v.paid_from === "Own pocket" ? "own" : "box",
               status: statusFrom(v.docstatus),
               amended_from: v.amended_from || null,
               serverSaved: true          /* so submit and cancel reach the server */
@@ -135,16 +132,12 @@
       var body = {
         posting_date: e.date, unit: e.category,
         debited_account: e.account, cost_head: e.head || null,
-        mode: e.mode === "upi" ? "UPI" : e.mode === "bank" ? "Bank / cheque" : "Cash",
         payee: e.payee, address: e.address,
         /* the server totals the lines and writes amount + summary itself */
         items: (e.items || []).map(function (i) {
           return { particulars: i.particulars, amount: i.amount };
         }),
-        spent_by: e.by, passed_by: e.approved || null,
-        /* Which purse paid. Only cash out of the school's box moves the
-           daybook, so the server needs this to total the day correctly. */
-        paid_from: e.src === "own" ? "Own pocket" : "Cash box"
+        spent_by: e.by, passed_by: e.approved || null
       };
       /* Links the amendment to the voucher it replaces, so the desk shows the
          same chain the register does. */

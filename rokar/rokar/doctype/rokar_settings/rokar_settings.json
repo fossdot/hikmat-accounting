@@ -4,6 +4,8 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "app_title",
+  "logo",
   "school_name",
   "place",
   "cb0",
@@ -11,6 +13,19 @@
   "bank_label"
  ],
  "fields": [
+  {
+   "fieldname": "app_title",
+   "fieldtype": "Data",
+   "label": "App Title",
+   "default": "Rokar — Cash Book & Voucher Register",
+   "description": "Shown as the heading of the cash book."
+  },
+  {
+   "fieldname": "logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo",
+   "description": "Shown beside the heading. Leave empty for the Hikmat Foundation emblem."
+  },
   {
    "default": "Noor Girls High School",
    "fieldname": "school_name",

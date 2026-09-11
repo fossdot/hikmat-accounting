@@ -11,8 +11,6 @@
   "unit",
   "debited_account",
   "cb0",
-  "mode",
-  "paid_from",
   "cost_head",
   "sb1",
   "payee",
@@ -59,24 +57,6 @@
    "fieldname": "cb0",
    "fieldtype": "Column Break",
    "label": ""
-  },
-  {
-   "default": "Cash",
-   "fieldname": "mode",
-   "fieldtype": "Select",
-   "label": "Mode",
-   "options": "Cash\nUPI\nBank / cheque",
-   "reqd": 1
-  },
-  {
-   "fieldname": "paid_from",
-   "fieldtype": "Select",
-   "label": "Paid From",
-   "options": "Cash box\nOwn pocket",
-   "default": "Cash box",
-   "reqd": 1,
-   "in_standard_filter": 1,
-   "description": "Own pocket means a trustee or staff member paid it themselves; the school's cash box is untouched, so the daybook does not count it."
   },
   {
    "depends_on": "eval:doc.unit=='STL'",

@@ -21,6 +21,10 @@ var BOOT=window.rokarBoot||{};
 var ORG=BOOT.org||"Noor Girls High School";
 var PLACE=BOOT.place||"Meghwal, Mathiya";
 var FOUNDATION=BOOT.foundation||"Hikmat Foundation";
+var TITLE=BOOT.title||"Rokar \u2014 Cash Book & Voucher Register";
+/* A Frappe site passes an asset path, or whatever the foundation attached in
+   Rokar Settings; the static build keeps the emblem beside index.html. */
+var LOGO=BOOT.logo||"hikmat-emblem.png";
 var SERIES=BOOT.series||"NGHS";                  /* voucher number prefix */
 
 /* The Indian financial year runs 1 April to 31 March. Every voucher number and
@@ -184,16 +188,16 @@ function seed(){
   function dd(day){var d=new Date(y,m,day); return iso(d);}
   var day=Math.max(3,Math.min(t.getDate(),26));
   var E=[
-    /* account, payee, address, particulars, amount, unit, head, by, mode */
-    ["Residence EXP","Gas agency","Mathiya","Gas cylinder refilling 1 pcs",1070,"Residence","Program Delivery","Accountant","cash"],
-    ["Residence EXP","Local vegetable market","Mathiya","Bhindi 1kg, mirchi 250g, aloo 5kg",265,"Residence","Program Delivery","Accountant","cash"],
-    ["School EXP","Electrician","Mathiya","Light repairing, labour charge",200,"School","Program Delivery","Accountant","cash"],
-    ["School EXP","Electrical shop","Lauriya","Classroom fan repairing 6 pcs",500,"School","Program Delivery","Accountant","cash"],
-    ["School EXP","Petrol pump","Ramnagar","Petrol refilling - school bus",1200,"School","Program Delivery","Accountant","cash"],
-    ["School EXP","Stationery shop","Bettiah","A4 paper 1 packet, printer ink",995,"School","Beneficiary Support","Accountant","upi"],
-    ["STL A/c","Form processing agent","Mathiya","Scholarship form processing - 9 students",450,"STL","Beneficiary Support","Accountant","cash"],
-    ["STL A/c","Travel agent","Meghwal","Emergency travel - district office",380,"STL","Contingency","Accountant","cash"],
-    ["Science Block Floor-3 Construction A/c","Building contractor","Lauriya","Payment of Mobilization Advance",50000,"Construction","Program Delivery","Accountant","bank"]
+    /* account, payee, address, particulars, amount, unit, head, by */
+    ["Residence EXP","Gas agency","Mathiya","Gas cylinder refilling 1 pcs",1070,"Residence","Program Delivery","Accountant"],
+    ["Residence EXP","Local vegetable market","Mathiya","Bhindi 1kg, mirchi 250g, aloo 5kg",265,"Residence","Program Delivery","Accountant"],
+    ["School EXP","Electrician","Mathiya","Light repairing, labour charge",200,"School","Program Delivery","Accountant"],
+    ["School EXP","Electrical shop","Lauriya","Classroom fan repairing 6 pcs",500,"School","Program Delivery","Accountant"],
+    ["School EXP","Petrol pump","Ramnagar","Petrol refilling - school bus",1200,"School","Program Delivery","Accountant"],
+    ["School EXP","Stationery shop","Bettiah","A4 paper 1 packet, printer ink",995,"School","Beneficiary Support","Accountant"],
+    ["STL A/c","Form processing agent","Mathiya","Scholarship form processing - 9 students",450,"STL","Beneficiary Support","Accountant"],
+    ["STL A/c","Travel agent","Meghwal","Emergency travel - district office",380,"STL","Contingency","Accountant"],
+    ["Science Block Floor-3 Construction A/c","Building contractor","Lauriya","Payment of Mobilization Advance",50000,"Construction","Program Delivery","Accountant"]
   ];
   var dayOf=[day-2,day-2,day-1,day-1,day,day,day,day-1,day];
   S.entries=E.map(function(r,i){
@@ -201,7 +205,7 @@ function seed(){
     return {id:uid(),no:SERIES+"/"+fyOf(dt)+"/"+String(i+1).padStart(4,"0"),date:dt,
             account:r[0],payee:r[1],address:r[2],
             items:[{particulars:r[3],amount:r[4]}],particulars:r[3],amount:r[4],
-            category:r[5],head:(r[5]==="STL"?r[6]:""),by:r[7],mode:r[8],approved:"Approver 1",sample:true,ts:Date.now()+i};
+            category:r[5],head:(r[5]==="STL"?r[6]:""),by:r[7],approved:"Approver 1",sample:true,ts:Date.now()+i};
   });
   var open=34530;
   [[dd(day-2),5000,800,0,0,2550],[dd(day-1),2500,400,0,0,400],[dd(day),1600,0,10000,0,550]].forEach(function(r){
@@ -240,6 +244,11 @@ function persist(){ saveLocal(); }
 /* ---------------- boot ---------------- */
 function boot(){
   buildStatic();
+  /* On a Frappe site the page is rendered inside the web template's <main>,
+     which the print stylesheet hides -- taking #printarea down with it and
+     printing a blank sheet. Lifting it to <body> makes both builds identical. */
+  var pa=$("#printarea");
+  if(pa && pa.parentNode !== document.body) document.body.appendChild(pa);
   var raw=Storage.load();
   if(raw && typeof raw.then==="function"){
     /* Frappe adapter: render the empty shell now, fill it when the books arrive. */
@@ -307,7 +316,7 @@ function buildStatic(){
   $("#v-submit").addEventListener("click",function(){ if(editingId) submitEntry(editingId); });
   $("#d-print").addEventListener("click",printDay);
   $("#add-item").addEventListener("click",function(){ addItemRow(); });
-  ["f-date","f-payee","f-addr","f-acct","f-by","f-mode","f-appr"].forEach(function(id){
+  ["f-date","f-payee","f-addr","f-acct","f-by","f-appr"].forEach(function(id){
     $("#"+id).addEventListener("input",renderSlip);
   });
   $("#vform").addEventListener("submit",addVoucher);
@@ -577,9 +586,6 @@ function showTab(name){
 var editingId=null;      /* draft open in the form, if any */
 var amendBase=null;      /* voucher no this draft is an amendment of */
 function statusOf(e){ return e.status||"Submitted"; }
-/* Which purse paid. Vouchers written before this field existed came out of the
-   cash box, which is what "box" means, so old daybooks keep their figures. */
-function srcOf(e){ return e.src||"box"; }
 function isPosted(e){ return statusOf(e)==="Submitted"; }
 function posted(list){ return list.filter(isPosted); }
 function entryById(id){ return S.entries.filter(function(x){return x.id===id;})[0]; }
@@ -608,8 +614,6 @@ function loadIntoForm(e){
   press("#f-cat",e.category);
   press("#f-head",e.head);
   $("#f-date").value=e.date||todayISO();
-  $("#f-mode").value=e.mode||"cash";
-  $("#f-src").value=srcOf(e);
   $("#f-acct").value=e.account||"";
   $("#f-addr").value=e.address||"";
   setItems(itemsOf(e).map(function(i){return {particulars:i.particulars,amount:i.amount};}));
@@ -783,7 +787,7 @@ function printDay(){
               ["STL Expenses","STL"],["Construction Expenses","Construction"]];
   BLOCKS.forEach(function(pair,bi){
     var mine=posted(S.entries).filter(function(e){
-      return e.date===dt&&e.category===pair[1]&&e.mode==="cash"&&srcOf(e)==="box";
+      return e.date===dt&&e.category===pair[1];
     });
     /* School and T.B. are always on the sheet; the other two only when used. */
     if(!mine.length&&bi>1) return;
@@ -825,7 +829,7 @@ function printEntry(id){
   var e=entryById(id); if(!e) return;
   var d={date:e.date,payee:e.payee,items:itemsOf(e),amount:n(e.amount),
          category:e.category,head:e.head,account:e.account,address:e.address,
-         by:e.by,mode:e.mode,approved:e.approved};
+         by:e.by,approved:e.approved};
   var box=el("div","slip");
   fillSlip(box,d,e.no);
   var pa=$("#printarea"); pa.innerHTML=""; pa.appendChild(box);
@@ -854,7 +858,7 @@ function formData(){
           amount:items.reduce(function(a,i){return a+n(i.amount);},0),
           category:pressed("#f-cat"),head:pressed("#f-head"),
           account:$("#f-acct").value.trim(),address:$("#f-addr").value.trim(),
-          by:$("#f-by").value,mode:$("#f-mode").value,src:$("#f-src").value,
+          by:$("#f-by").value,
           approved:(pressed("#f-cat")==="Construction")?"":$("#f-appr").value};
 }
 /* Lays out the same form as the printed NGHS voucher book:
@@ -893,7 +897,7 @@ function fillSlip(s,d,no){
     : fieldRow([["Debited A/c :",d.account]]));
   F.appendChild(fieldRow([["Paid to Mr./Mrs./M/s:",d.payee,"grow2"],["Date :-",dmy(d.date)]]));
   F.appendChild(fieldRow([["Address :-",d.address]]));
-  F.appendChild(fieldRow([["Voucher No. :",no],["Mode :-",d.mode.toUpperCase()]]));
+  F.appendChild(fieldRow([["Voucher No. :",no]]));
   s.appendChild(F);
 
   var t=el("table","vt");
@@ -1212,7 +1216,7 @@ function renderRegister(){
   $("#r-note").textContent=rows.length+" voucher"+(rows.length===1?"":"s")+
     (nd?" \u00b7 "+nd+" draft"+(nd===1?"":"s")+" not yet in the books":"");
   if(!rows.length){
-    var tr=el("tr"); var td=el("td","empty","No vouchers for "+monthLabel(mk)+(cat?" under "+cat:"")+"."); td.colSpan=12; tr.appendChild(td); tb.appendChild(tr); return;
+    var tr=el("tr"); var td=el("td","empty","No vouchers for "+monthLabel(mk)+(cat?" under "+cat:"")+"."); td.colSpan=11; tr.appendChild(td); tb.appendChild(tr); return;
   }
   var total=0;
   rows.forEach(function(e){
@@ -1241,12 +1245,6 @@ function renderRegister(){
     var c=el("td"); c.appendChild(el("span","pill p-"+e.category.toLowerCase(),e.category)); tr.appendChild(c);
     tr.appendChild(el("td",null,e.head||"\u2014"));
     tr.appendChild(el("td",null,e.by));
-    var md=el("td"); md.appendChild(el("span","pill p-mute",e.mode));
-    if(srcOf(e)==="own"){
-      var op=el("div",null,"own pocket");
-      op.style.cssText="font-size:10.5px;color:var(--muted);margin-top:2px"; md.appendChild(op);
-    }
-    tr.appendChild(md);
     tr.appendChild(el("td","r num",inr(e.amount)));
     /* Only the moves the status allows: a draft is edited, submitted or thrown
        away; a submitted voucher can only be cancelled; a cancelled one amended.
@@ -1262,7 +1260,7 @@ function renderRegister(){
     tr.appendChild(x);
     tb.appendChild(tr);
   });
-  var ftr=el("tr"); var f1=el("td",null,"Total — "+monthLabel(mk)); f1.colSpan=10;
+  var ftr=el("tr"); var f1=el("td",null,"Total — "+monthLabel(mk)); f1.colSpan=9;
   ftr.appendChild(f1); ftr.appendChild(el("td","r num",inr(total))); ftr.appendChild(el("td"));
   tf.appendChild(ftr);
 }
@@ -1526,7 +1524,7 @@ function renderReports(){
   mh.appendChild(mhr); MM.appendChild(mh);
   var mb=el("tbody");
   [["Opening cash",opening],["Fee cash received",feeCash],["Bus fee cash received",busCash],
-   ["Withdrawn from bank",wdl],["Cash expenses",-ents.filter(function(e){return e.mode==="cash";}).reduce(function(a,e){return a+n(e.amount);},0)],
+   ["Withdrawn from bank",wdl],["Cash expenses",-dks.reduce(function(a,k){return a+expensesOf(k);},0)],
    ["Deposited to bank",-dep],["Closing cash",closing]].forEach(function(r,i,arr){
     var tr=el("tr");
     tr.appendChild(el("td",null,r[0]));
@@ -1599,13 +1597,12 @@ function offer(filename,text,mime){
 function exportRegister(){
   var mk=$("#r-month").value;
   var rows=[["Voucher No","Status","Line","Date","Debited A/c","Paid To","Address","Particulars",
-             "Unit","Cost Head","Accountant","Passed By","Mode","Paid From","Line Amount","Voucher Total"]];
+             "Unit","Cost Head","Accountant","Passed By","Line Amount","Voucher Total"]];
   S.entries.filter(function(e){return ym(e.date)===mk;}).sort(function(a,b){return a.date<b.date?-1:1;})
     .forEach(function(e){
       itemsOf(e).forEach(function(it,i){
         rows.push([e.no,statusOf(e),i+1,dmy(e.date),e.account||"",e.payee,e.address||"",it.particulars,
-                   e.category,e.head,e.by,e.approved||"",e.mode,
-                   srcOf(e)==="own"?"Own pocket":"Cash box",it.amount,i===0?e.amount:""]);
+                   e.category,e.head,e.by,e.approved||"",it.amount,i===0?e.amount:""]);
       });
     });
   offer("register-"+mk+".csv",csv(rows));
@@ -1616,7 +1613,7 @@ function exportTally(){
   /* the CA gets submitted vouchers only \u2014 a draft is not yet a transaction */
   posted(S.entries).filter(function(e){return ym(e.date)===mk;}).sort(function(a,b){return a.date<b.date?-1:1;})
     .forEach(function(e){
-      var cr=e.mode==="cash"?"Cash":(e.mode==="upi"?"ICICI Bank (UPI)":"ICICI Bank");
+      var cr="Cash";   /* the mode field is gone; a voucher is a cash payment */
       itemsOf(e).forEach(function(it){
         rows.push([dmy(e.date),e.no,"Payment",e.account||(e.head+" - "+e.category),cr,
                    e.head?(e.category+" : "+e.head):e.category,it.amount,
@@ -1640,6 +1637,10 @@ function exportDaybook(){
 function renderMast(){
   var sub=$("#mast-sub");
   if(sub) sub.textContent=ORG+" \u00b7 "+FOUNDATION+" \u00b7 FY "+fyLabel();
+  var t=$("#mast-title"); if(t) t.textContent=TITLE;
+  var lg=$("#mast-logo");
+  if(lg){ lg.src=LOGO; lg.alt=ORG; }
+  document.title=TITLE;
 }
 function renderAll(){
   renderMast();

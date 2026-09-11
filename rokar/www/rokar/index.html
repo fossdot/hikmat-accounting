@@ -8,8 +8,12 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Oswald:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="/assets/rokar/styles.css">
 <style>
-  /* The app owns the full width; drop the web container's gutters. */
+  /* Drop the web template's own gutters and width. Frappe wraps the page in its
+     <main>, and so does the app -- so the reset is undone for the inner one,
+     which keeps the column and gutters the app sets for itself. */
   .page_content, .page-content, main, .container { max-width: none !important; padding: 0 !important; }
+  .page_content main { max-width: 1240px !important; margin: 0 auto !important;
+                       padding: 20px var(--gut, 22px) 60px !important; }
   body { margin: 0; }
   footer, .web-footer, .navbar { display: none !important; }
 </style>
@@ -18,9 +22,9 @@
 {% block page_content %}
 <div class="mast">
   <div class="mast-in">
-    <div class="crest">रो</div>
+    <img class="crest" id="mast-logo" alt="">
     <div>
-      <h1>Rokar — Cash Book &amp; Voucher Register</h1>
+      <h1 id="mast-title">Rokar — Cash Book &amp; Voucher Register</h1>
       <div class="sub" id="mast-sub"></div>
     </div>
     <div class="mast-spacer"></div>
@@ -50,16 +54,7 @@
       <form class="panel" id="vform" autocomplete="off">
         <header><h2>New cash voucher</h2><span class="note" id="next-no">—</span></header>
         <div class="pad">
-          <div class="row2">
-            <div class="field"><label for="f-date">Date <span class="hi">दिनांक</span></label><input type="date" id="f-date" required></div>
-            <div class="field"><label for="f-mode">Mode <span class="hi">माध्यम</span></label>
-              <select id="f-mode"><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank / cheque</option></select></div>
-          </div>
-          <div class="field"><label for="f-src">Paid from <span class="hi">भुगतान स्रोत</span></label>
-            <select id="f-src">
-              <option value="box">School cash box</option>
-              <option value="own">Own pocket — outside the cash box</option>
-            </select></div>
+          <div class="field"><label for="f-date">Date <span class="hi">दिनांक</span></label><input type="date" id="f-date" required></div>
           <div class="field"><label>Unit <span class="hi">इकाई</span></label>
             <div class="chipset" id="f-cat"></div></div>
           <div class="field"><label for="f-acct">Debited A/c <span class="hi">डेबिट खाता</span></label>
@@ -117,7 +112,7 @@
         <span class="note" id="r-note"></span>
       </header>
       <div class="tw"><table id="r-table">
-        <thead><tr><th>Voucher</th><th>Status</th><th>Date</th><th>Debited A/c</th><th>Paid to</th><th>Particulars</th><th>Unit</th><th>Cost head</th><th>Accountant</th><th>Mode</th><th class="r">Amount ₹</th><th></th></tr></thead>
+        <thead><tr><th>Voucher</th><th>Status</th><th>Date</th><th>Debited A/c</th><th>Paid to</th><th>Particulars</th><th>Unit</th><th>Cost head</th><th>Accountant</th><th class="r">Amount ₹</th><th></th></tr></thead>
         <tbody></tbody><tfoot></tfoot>
       </table></div>
       <div class="pad" style="border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -268,7 +263,9 @@
   window.rokarBoot = {
     user: {{ frappe.session.user | tojson }},
     org: {{ school_name | tojson }},
-    place: {{ place | tojson }}
+    place: {{ place | tojson }},
+    title: {{ app_title | tojson }},
+    logo: {{ logo | tojson }}
   };
 </script>
 <script src="/assets/rokar/storage-frappe.js"></script>

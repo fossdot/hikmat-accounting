@@ -14,4 +14,7 @@ def get_context(context):
 	settings = frappe.get_cached_doc("Rokar Settings")
 	context.school_name = settings.school_name
 	context.place = settings.place
+	context.app_title = settings.app_title or "Rokar \u2014 Cash Book & Voucher Register"
+	# The bundled emblem unless the foundation has attached its own.
+	context.logo = settings.logo or "/assets/rokar/images/hikmat-emblem.png"
 	return context
