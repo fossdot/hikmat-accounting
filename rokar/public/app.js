@@ -26,6 +26,9 @@ var TITLE=BOOT.title||"Rokar \u2014 Cash Book & Voucher Register";
    Rokar Settings; the static build keeps the emblem beside index.html. */
 var LOGO=BOOT.logo||"hikmat-emblem.png";
 var SERIES=BOOT.series||"NGHS";                  /* voucher number prefix */
+/* The paper voucher book has three ruled rows and the printed slip is half an
+   A4, so three is what fits. Anything longer belongs on its own voucher. */
+var MAX_LINES=3;
 
 /* The Indian financial year runs 1 April to 31 March. Every voucher number and
    every label derives its year from a date, so the series rolls over by itself
@@ -337,7 +340,10 @@ function buildStatic(){
   $("#edit-payee").addEventListener("click",function(){ managePerson("payees","#f-payee","payee"); });
   $("#v-submit").addEventListener("click",function(){ if(editingId) submitEntry(editingId); });
   $("#d-print").addEventListener("click",printDay);
-  $("#add-item").addEventListener("click",function(){ addItemRow(); });
+  $("#add-item").addEventListener("click",function(){
+    if($$("#f-items .itemrow").length>=MAX_LINES) return;
+    addItemRow();
+  });
   ["f-date","f-payee","f-addr","f-acct","f-by","f-appr"].forEach(function(id){
     $("#"+id).addEventListener("input",renderSlip);
   });
@@ -345,7 +351,7 @@ function buildStatic(){
   $("#v-clear").addEventListener("click",resetForm);
   $("#btn-print").addEventListener("click",function(){
     $("#printarea").innerHTML=$("#slip").outerHTML;
-    setPageSize("A5 landscape");
+    setPageSize("A4 portrait");
     /* The preview's own number: the draft's if one is open, otherwise the
        number this voucher will take when it is saved. */
     var cur=editingId?entryById(editingId):null;
@@ -460,6 +466,16 @@ function addItemRow(vals){
 }
 function renumberItems(){
   $$("#f-items .itemrow").forEach(function(r,i){ $(".i-sn",r).textContent=(i+1)+"."; });
+  syncAddItem();
+}
+/* Every path that adds or removes a line ends in renumberItems(), so the cap is
+   enforced in one place. A voucher loaded from before the cap keeps all of its
+   lines -- they are the record -- but no more can be added to it. */
+function syncAddItem(){
+  var b=$("#add-item"); if(!b) return;
+  var full=$$("#f-items .itemrow").length>=MAX_LINES;
+  b.disabled=full;
+  b.title=full?"A voucher carries at most "+MAX_LINES+" lines":"";
 }
 function readItems(){
   return $$("#f-items .itemrow").map(function(r){
@@ -695,9 +711,19 @@ function submitEntry(id,asked){
        yes:"Submit",yesHindi:"जमा करें"},go);
 }
 /* ---------------- printing ----------------
-   The voucher goes on A5 landscape and the day sheet on A4 landscape. A
-   stylesheet can only hold one @page size, so the rule is injected just before
-   the print and overrides the default in styles.css by coming later. */
+   The sheet a document is printed on -- A4 portrait for both of them now. A
+   voucher takes the top half of one, the day sheet takes a whole one.
+
+   Naming the paper that is really in the tray is the whole point. A page box
+   wider than the sheet does not shrink to fit: it hangs off an edge and the
+   overhang is simply not printed. Worse, the orientation keyword is not a
+   request -- the browser applies it over whatever the print dialog says, by
+   swapping the sheet's width and height. "A5 landscape" against the A5 the
+   clerk had selected is what cost the voucher 62mm off its left side, so no
+   document here asks for landscape any more.
+
+   A stylesheet can only hold one @page size, so the rule is injected just
+   before the print and overrides the default in styles.css by coming later. */
 function setPageSize(spec){
   var st=$("#pagesize");
   if(!st){ st=el("style"); st.id="pagesize"; document.head.appendChild(st); }
@@ -706,7 +732,10 @@ function setPageSize(spec){
 
 /* The day sheet the foundation already uses: NGHS's own wording and order,
    the cash account and note count down the left, what the money went on and
-   the bank transfers down the right. One A4 landscape page.
+   the bank transfers down the right. One A4 portrait page: the two columns
+   sit side by side just as comfortably at 190mm as they did at 277mm, and
+   printing everything on the same sheet means the clerk never has to reach
+   into the printer dialog between a voucher and a day sheet.
    "T.B." on their sheet is the Teachers' Block, which this app calls
    Residence. The right-hand itemisation is drawn from the same vouchers as the
    "Expenses" line on the left, so the two always agree. */
@@ -815,7 +844,7 @@ function printDay(){
   box.appendChild(cols);
 
   var pa=$("#printarea"); pa.innerHTML=""; pa.appendChild(box);
-  setPageSize("A4 landscape");
+  setPageSize("A4 portrait");
   printAs("daybook_"+dmy(dt).replace(/-/g,"_"));
 }
 
@@ -850,7 +879,7 @@ function printEntry(id){
   var box=el("div","slip");
   fillSlip(box,d,e.no);
   var pa=$("#printarea"); pa.innerHTML=""; pa.appendChild(box);
-  setPageSize("A5 landscape");
+  setPageSize("A4 portrait");
   printAs(e.no);
 }
 
@@ -946,7 +975,7 @@ function fillSlip(s,d,no){
     tr.appendChild(el("td","c-amt",it.amount?inr(it.amount):""));
     tb.appendChild(tr);
   });
-  for(var b=lines.length;b<4;b++){
+  for(var b=lines.length;b<MAX_LINES;b++){
     var blank=el("tr","filler");
     blank.appendChild(el("td","c-sn")); blank.appendChild(el("td")); blank.appendChild(el("td","c-amt"));
     tb.appendChild(blank);
@@ -987,6 +1016,10 @@ function addVoucher(ev){
   ev.preventDefault();
   var d=formData();
   if(!d.items.length){ note("Add at least one line to the voucher."); return; }
+  if(d.items.length>MAX_LINES){
+    note("A voucher carries at most "+MAX_LINES+" lines \u2014 write the rest on another one.");
+    return;
+  }
   var bad=0;
   d.items.forEach(function(i,ix){ if(!i.particulars||!(n(i.amount)>0)) bad=bad||ix+1; });
   if(bad){ note("Line "+bad+" needs both a description and an amount above zero."); return; }

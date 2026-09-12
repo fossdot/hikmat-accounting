@@ -3,15 +3,18 @@
 Cash voucher, daybook and cost-head reports for Hikmat Foundation schools.
 
 Rokar replaces a paper voucher book and a spreadsheet daybook. It prints the
-same documents the school already uses — an A5 landscape cash voucher and an A4
-landscape day sheet — so nothing about the audit trail has to change.
+same documents the school already uses — a half-sheet cash voucher and a
+full-sheet day sheet — so nothing about the audit trail has to change. Both
+print on A4 portrait, the paper the school keeps in the tray, so there is never
+a printer setting to change between them.
 
 ### What it does
 
-**Cash vouchers** carry several lines and total themselves and print at A5
-landscape to match the school's voucher book — choose "Save as PDF" in the print
-dialog to keep a copy. Construction vouchers print with a contractor signature
-block instead of "Passed by", as the paper ones do.
+**Cash vouchers** carry up to three lines, total themselves, and print on the
+top half of an A4 — the same size as the school's voucher book — with a dashed
+rule across the fold to cut along. The lower half comes out blank. Choose "Save
+as PDF" in the print dialog to keep a copy. Construction vouchers print with a
+contractor signature block instead of "Passed by", as the paper ones do.
 
 **The document lifecycle** is three steps: a voucher is saved as a **Draft**,
 **Submitted** once it belongs in the books, and **Deleted** if it turns out to

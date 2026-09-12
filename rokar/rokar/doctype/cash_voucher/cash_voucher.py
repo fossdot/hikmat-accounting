@@ -9,6 +9,11 @@ from frappe.utils import flt, getdate, money_in_words
 
 SERIES = "NGHS"
 
+# The paper voucher book has three ruled rows and the printed slip is half an
+# A4, so three is what fits. The form greys out "+ Add line" at three; this is
+# the same rule for anything that reaches the API without going through it.
+MAX_LINES = 3
+
 
 def financial_year(posting_date):
 	"""The Indian financial year a date falls in, as "26-27".
@@ -42,6 +47,11 @@ class CashVoucher(Document):
 		"""A voucher is its lines; the total is never typed by hand."""
 		if not self.items:
 			frappe.throw(_("Add at least one line to the voucher."))
+
+		if len(self.items) > MAX_LINES:
+			frappe.throw(
+				_("A voucher carries at most {0} lines — write the rest on another one.").format(MAX_LINES)
+			)
 
 		total = 0
 		for idx, row in enumerate(self.items, start=1):

@@ -107,6 +107,8 @@ input[type=number],.amt{font-family:var(--mono);font-variant-numeric:tabular-num
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-strong);font-weight:500}
 .btn.ghost:hover{background:var(--surface-2);filter:none}
 .btn.sm{padding:5px 11px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:default;filter:none}
+.btn[disabled]:hover{filter:none;background:transparent}
 .btn.icon{display:inline-flex;align-items:center;gap:7px}
 .btn svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
          stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
@@ -258,15 +260,68 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
 .gate-foot .hi{font-family:"IBM Plex Sans Devanagari","IBM Plex Sans",sans-serif}
 #printarea{display:none}
 @media print{
-  /* A5, and no page margin at all: with no margin left to draw in, Chrome and
-     Safari drop their own header and footer -- the date, the page title, the
-     URL and "1/1". The slip carries its own padding instead. */
-  @page{size:A5 landscape;margin:0}
+  /* A4 portrait -- the paper the tray actually holds.
+
+     The voucher used to ask for A5 landscape, which is a page box 210mm wide.
+     Selecting A5 in the printer gets the 148mm-wide portrait sheet, and the
+     driver hung the wide box off the right edge of it: 62mm ran off the left,
+     taking the S.NO. column and every field label with it. Asking for the paper
+     that is really loaded is what stops that for good, and A4 costs nothing --
+     the voucher only needs half of one.
+
+     margin:0 so Chrome drops its own header and footer -- the date, the page
+     title, the URL and "1/1"; it hides them once there is under ~8mm to draw
+     them in. Safari governs that with a checkbox in its own dialog instead, so
+     do not count on it there. Each document carries its own padding, and it is
+     10mm at the sides: comfortably outside the unprintable band every printer
+     keeps around the sheet -- 3mm on the school's Epson -- which is what "no
+     margin" would otherwise walk straight into. */
+  @page{size:A4 portrait;margin:0}
   body{background:#fff;color:#000;margin:0}
+  /* Paper is white whatever the screen is. The theme variables are still live
+     in a dark-mode browser, and a colour declared straight on an element --
+     table.vt th carries color:var(--ink) itself -- is never reached by an
+     inherited override on an ancestor, however specific. So the palette is
+     reset at the print root, which fixes every var() at once, including the
+     ones nobody has written yet. */
+  #printarea{--ink:#000;--muted:#444;--faint:#666;--line:#999;--line-strong:#666;
+             --surface:#fff;--surface-2:#f2f2f2;--bg:#fff;
+             --accent:#000;--accent-ink:#000;--accent-soft:#f2f2f2;--on-accent:#fff}
   /* The voucher alone goes on the paper: no masthead, tabs, form or footnotes. */
   .mast,.tabs,main{display:none!important}
-  #printarea{display:block!important;padding:9mm 8mm}
-  #printarea .slip,#printarea .daysheet{border:0;box-shadow:none;padding:0;background:#fff;color:#000}
+  #printarea{display:block!important;padding:0}
+  #printarea .slip,#printarea .daysheet{border:0;box-shadow:none;background:#fff;color:#000}
+  /* The day sheet fills a whole sheet rather than half of one. Its sides go to
+     the same 10mm as the voucher -- 2mm wider than the print area used to hand
+     it -- so both documents clear the printer's dead band by the same margin.
+     Its two columns are fixed-layout tables and take the 4mm without rewrapping. */
+  #printarea .daysheet{padding:9mm 10mm}
+
+  /* One voucher is half an A4: always the same size to file, and the clerk
+     cuts along the dashed rule. The lower half comes out blank. The rhythm
+     below is tighter than the screen preview's to buy that half -- three lines
+     with a contractor's full name and a full address lands around 113mm, well
+     clear of the 148.5mm fold. */
+  #printarea .slip{box-sizing:border-box;min-height:148.5mm;padding:7mm 10mm 8mm;
+                   position:relative;border-radius:0;
+                   break-inside:avoid;page-break-inside:avoid}
+  /* Where to cut, inset to the same 10mm as the body. Drawn edge to edge it
+     would lose both ends in the band no printer can reach -- which is exactly
+     where the scissors go in. */
+  #printarea .slip::after{content:"";position:absolute;left:10mm;right:10mm;bottom:0;
+                          border-top:.3mm dashed #999}
+  #printarea .slip .mh{margin-bottom:9px}
+  #printarea .slip .fields{gap:5px;margin-bottom:9px}
+  #printarea .slip .fv{min-height:17px}
+  #printarea .slip table.vt{margin-bottom:9px}
+  #printarea .slip table.vt th{padding-top:4px;padding-bottom:4px}
+  /* The voucher keeps its own height and the rest of the half-sheet stays
+     blank below it. Pushing the signatures down to the fold instead would put
+     the signing line a few millimetres above the cut, and a signature written
+     at any size runs straight over it. */
+  #printarea .slip .sigs{margin-top:12px}
+  #printarea .slip .sig .nm{min-height:33px}
+
   #printarea .daysheet table.dt th,#printarea .daysheet table.dt td{border-color:#000}
   #printarea .daysheet .memo td{color:#444}
   #printarea .slip .fv,#printarea .slip table.vt th,#printarea .slip table.vt td{border-color:#000}
