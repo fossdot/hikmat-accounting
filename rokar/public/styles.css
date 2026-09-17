@@ -298,11 +298,16 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
   #printarea .daysheet{padding:9mm 10mm}
 
   /* One voucher is half an A4: always the same size to file, and the clerk
-     cuts along the dashed rule. The lower half comes out blank. The rhythm
-     below is tighter than the screen preview's to buy that half -- three lines
-     with a contractor's full name and a full address lands around 113mm, well
-     clear of the 148.5mm fold. */
-  #printarea .slip{box-sizing:border-box;min-height:148.5mm;padding:7mm 10mm 8mm;
+     cuts along the dashed rule. The lower half comes out blank.
+
+     The voucher is drawn to fill that half rather than to sit in the top of
+     it, the way the school's own printed book does: a masthead across the top,
+     the signature line near the bottom, and the table taking whatever height
+     is left between them -- so a voucher of one line and a voucher of three
+     come off the printer the same size. The screen preview keeps its own
+     smaller sizes; these apply to the paper alone. */
+  #printarea .slip{box-sizing:border-box;display:flex;flex-direction:column;
+                   height:148.5mm;padding:7mm 10mm 9mm;
                    position:relative;border-radius:0;
                    break-inside:avoid;page-break-inside:avoid}
   /* Where to cut, inset to the same 10mm as the body. Drawn edge to edge it
@@ -310,17 +315,38 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
      where the scissors go in. */
   #printarea .slip::after{content:"";position:absolute;left:10mm;right:10mm;bottom:0;
                           border-top:.3mm dashed #999}
-  #printarea .slip .mh{margin-bottom:9px}
-  #printarea .slip .fields{gap:5px;margin-bottom:9px}
-  #printarea .slip .fv{min-height:17px}
-  #printarea .slip table.vt{margin-bottom:9px}
-  #printarea .slip table.vt th{padding-top:4px;padding-bottom:4px}
-  /* The voucher keeps its own height and the rest of the half-sheet stays
-     blank below it. Pushing the signatures down to the fold instead would put
-     the signing line a few millimetres above the cut, and a signature written
-     at any size runs straight over it. */
-  #printarea .slip .sigs{margin-top:12px}
-  #printarea .slip .sig .nm{min-height:33px}
+  #printarea .slip .mh{margin-bottom:3mm}
+  #printarea .slip .mh .nm{font-size:34px}
+  #printarea .slip .mh .pl{font-size:18px;margin-top:2px}
+  #printarea .slip .fields{font-size:15px;gap:2.2mm;margin-bottom:3.5mm}
+  #printarea .slip .fr{gap:9px}
+  #printarea .slip .fv{min-height:5mm;padding-bottom:2px}
+  #printarea .slip table.vt{flex:1;font-size:15px;margin-bottom:0}
+  #printarea .slip table.vt th,#printarea .slip table.vt td{padding:1.2mm 3mm}
+  #printarea .slip table.vt th{font-size:14.5px}
+  /* A floor under each line, so no row is left hairline-thin; the stretch the
+     table takes from the half-sheet does the rest. A blank cell holds no line
+     of text and would stay short while the rows that carry one take all of
+     that stretch, so the blank rows are given a space of their own to stand on
+     and the slack is shared out evenly. */
+  #printarea .slip table.vt tbody td{height:5.5mm}
+  #printarea .slip table.vt .filler td::before{content:"\00a0"}
+  /* A voucher carries three lines. One saved before that limit, or by a
+     frontend that never had it, draws its rows tighter rather than push the
+     signature line over the cut. */
+  #printarea .slip table.vt:has(tbody tr:nth-child(4)) th,
+  #printarea .slip table.vt:has(tbody tr:nth-child(4)) td{height:auto;padding:.6mm 3mm;font-size:14px}
+  #printarea .slip .c-sn{width:17mm}
+  #printarea .slip .c-amt{width:30mm}
+  #printarea .slip .vt .wordrow .w{padding-left:8px}
+  #printarea .slip .vt .grand{font-size:17px}
+  /* The signing line now reaches down near the fold, which is what fills the
+     half-sheet -- but the space to sign in is the blank above each line, not
+     below it, and the printed label plus the 9mm foot keep better than a
+     centimetre of paper under the line before the scissors. */
+  #printarea .slip .sigs{margin-top:4mm}
+  #printarea .slip .sig .nm{font-size:14.5px;min-height:8mm}
+  #printarea .slip .sig .lb{font-size:13.5px}
 
   #printarea .daysheet table.dt th,#printarea .daysheet table.dt td{border-color:#000}
   #printarea .daysheet .memo td{color:#444}
