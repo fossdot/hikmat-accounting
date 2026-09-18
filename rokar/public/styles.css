@@ -339,6 +339,10 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
   #printarea .slip .c-sn{width:17mm}
   #printarea .slip .c-amt{width:30mm}
   #printarea .slip .vt .wordrow .w{padding-left:8px}
+  /* "Total" is pre-printed hard against the Amount column, and the words run
+     up to meet it -- a long one landed against the T with nothing between
+     them. This is the gap that keeps "Rupees Only" and "Total" two words. */
+  #printarea .slip .vt .wordrow .tl{padding-left:10px}
   #printarea .slip .vt .grand{font-size:17px}
   /* The signing line now reaches down near the fold, which is what fills the
      half-sheet -- but the space to sign in is the blank above each line, not

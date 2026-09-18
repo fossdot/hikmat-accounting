@@ -972,7 +972,7 @@ function fillSlip(s,d,no){
     var tr=el("tr");
     tr.appendChild(el("td","c-sn",(i+1)+"."));
     tr.appendChild(el("td",null,it.particulars||""));
-    tr.appendChild(el("td","c-amt",it.amount?inr(it.amount):""));
+    tr.appendChild(el("td","c-amt",it.amount?rs(it.amount):""));
     tb.appendChild(tr);
   });
   for(var b=lines.length;b<MAX_LINES;b++){
@@ -995,7 +995,7 @@ function fillSlip(s,d,no){
   wl.appendChild(el("span","tl","Total"));
   wc.appendChild(wl);
   wr.appendChild(wc);
-  wr.appendChild(el("td","c-amt grand",d.amount?inr(d.amount):""));
+  wr.appendChild(el("td","c-amt grand",d.amount?rs(d.amount):""));
   tf.appendChild(wr); t.appendChild(tf);
   s.appendChild(t);
 
