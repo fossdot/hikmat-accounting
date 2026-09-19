@@ -177,6 +177,11 @@
         return api("/api/resource/Cash Voucher/" + encodeURIComponent(e.no),
                    { method: "PUT", body: body }).then(function (r) { return r.data; });
       }
+      /* A correction of a voucher that was in the books: the one it corrects
+         has been cancelled, and naming it here is what chains the two -- the
+         doctype gives the new document that name with a -1 on the end, so the
+         paper still reads as the same voucher, corrected. */
+      if (e.amendedFrom) body.amended_from = e.amendedFrom;
       return api("/api/resource/Cash Voucher", { method: "POST", body: body })
                .then(function (r) { return r.data; });
     },
@@ -209,6 +214,16 @@
         method: "POST",
         body: { doctype: "Cash Voucher", name: name }
       }).then(drop, drop);
+    },
+
+    /** Taking a voucher back out of the books to correct it. Cancelling is all
+     *  that happens here: the cancelled document stays as the record of what
+     *  was in the books, and the correction is posted against it. */
+    cancelVoucher: function (name) {
+      return api("/api/method/frappe.client.cancel", {
+        method: "POST",
+        body: { doctype: "Cash Voucher", name: name }
+      });
     },
 
     saveDay: function (d) {
@@ -303,6 +318,9 @@
  * Optional:   saveVoucher(entry)            create, or update when
  *                                           entry.serverSaved is set
  *             submitVoucher(name)           draft -> submitted
+ *             cancelVoucher(name)           takes a submitted voucher back out
+ *                                           of the books so a correction can be
+ *                                           posted against it
  *             deleteVoucher(name, submitted)  removes it, cancelling first
  *                                           when Frappe demands it
  *             saveDay(day)
@@ -315,6 +333,8 @@
  * implement as few as it likes; the browser copy of the books stays correct
  * either way. A voucher carries `status` ("Draft" | "Submitted"); only
  * Submitted vouchers reach the daybook, the monthly reports and the Tally
- * export. There is no cancel and no amendment: a wrong voucher is deleted and
- * written again.
+ * export. A voucher already in the books is corrected by taking it back out:
+ * it returns to Draft, the document behind it is cancelled, and the correction
+ * is posted as an amendment of that cancelled one. A voucher nobody wants at
+ * all is deleted instead.
  * ------------------------------------------------------------------------- */

@@ -711,6 +711,45 @@ function editDraft(id){
   editingId=id; showTab("voucher"); loadIntoForm(e);
   say("Editing draft "+e.no+".");
 }
+/* Correcting a voucher that is already in the books. It comes back out of
+   them while it is corrected -- a draft reaches neither the daybook nor the
+   reports -- and goes back in when it is submitted again, which is asked for
+   a second time. On a site the document is cancelled and the correction is
+   written as an amendment of it, so the voucher that was in the books stays
+   in the record with the correction pointing at it. */
+function amendEntry(id){
+  var e=entryById(id); if(!e) return;
+  if(statusOf(e)==="Draft"){ editDraft(id); return; }
+  if(statusOf(e)!=="Submitted"){ note("Only a voucher that is in the books can be corrected."); return; }
+  var onServer=!!(Storage.cancelVoucher&&e.serverSaved);
+  ask({title:"Take voucher "+e.no+" back out for correction?",
+       hindi:"\u0938\u0941\u0927\u093e\u0930 \u0915\u0947 \u0932\u093f\u090f \u092f\u0939 \u0935\u093e\u0909\u091a\u0930 \u092c\u0939\u0940 \u0938\u0947 \u0935\u093e\u092a\u0938 \u0932\u0947\u0902?",
+       note:"It leaves the daybook and the monthly reports while it is corrected, and "+
+            "goes back into them only when you submit it again."+
+            (onServer?" The voucher in the books is cancelled and kept; the correction is "+
+                      "written against it and takes its number with a -1.":""),
+       noteHindi:"\u0938\u0941\u0927\u093e\u0930 \u0915\u0947 \u0926\u094c\u0930\u093e\u0928 \u092f\u0939 \u0930\u094b\u0915\u0921\u093c \u092c\u0939\u0940 \u0914\u0930 \u0930\u093f\u092a\u094b\u0930\u094d\u091f \u0938\u0947 \u0939\u091f \u091c\u093e\u090f\u0917\u093e\u0964 \u0926\u094b\u092c\u093e\u0930\u093e \u091c\u092e\u093e \u0915\u0930\u0928\u0947 \u092a\u0930 \u0939\u0940 \u0935\u093e\u092a\u0938 \u0926\u0930\u094d\u091c \u0939\u094b\u0917\u093e\u0964",
+       yes:"Correct it",yesHindi:"\u0938\u0941\u0927\u093e\u0930\u0947\u0902"},function(){
+    var was=e.no, prevStatus=e.status, prevAmended=e.amendedFrom;
+    e.status="Draft"; e.amendedFrom=was;
+    editingId=id; showTab("voucher"); loadIntoForm(e);
+    persist(); renderAll(); syncFormMode();
+    say("Voucher "+was+" is out of the books for correction.");
+    if(onServer){
+      Storage.cancelVoucher(was).then(function(){
+        /* The cancelled document cannot be written to again, so the correction
+           is saved as a new one -- carrying amendedFrom, which is what chains
+           the two together. */
+        e.serverSaved=false; persist();
+      }).catch(function(err){
+        e.status=prevStatus; e.amendedFrom=prevAmended;
+        editingId=null; resetForm(); persist(); renderAll();
+        note("The server did not take this voucher back: "+((err&&err.message)||"unknown error")+
+             " It is still in the books, as it was.");
+      });
+    }
+  });
+}
 function submitEntry(id,asked){
   var e=entryById(id); if(!e) return;
   if(statusOf(e)!=="Draft"){ note("Only a draft can be submitted."); return; }
@@ -727,10 +766,21 @@ function submitEntry(id,asked){
     }
   }
   if(asked){ go(); return; }                    /* the save already asked */
+  /* A correction is asked for twice: once on the way out of the books and
+     again here, on the way back in. */
+  if(e.amendedFrom){
+    ask({title:"Put the corrected voucher "+e.no+" back in the books?",
+         hindi:"सुधारा हुआ वाउचर बही में वापस दर्ज करें?",
+         note:"It enters the daybook and the monthly reports again, in place of "+
+              e.amendedFrom+", which stays in the record as cancelled.",
+         noteHindi:"यह रोकड़ बही और मासिक रिपोर्ट में दोबारा दर्ज हो जाएगा। पुराना वाउचर रद्द के रूप में रिकॉर्ड में रहेगा।",
+         yes:"Submit",yesHindi:"जमा करें"},go);
+    return;
+  }
   ask({title:"Submit voucher "+e.no+"?",
        hindi:"यह वाउचर जमा करें?",
-       note:"It enters the daybook and the monthly reports. After this it can be corrected only by cancelling and amending it.",
-       noteHindi:"यह रोकड़ बही और मासिक रिपोर्ट में दर्ज हो जाएगा। इसके बाद सुधार केवल रद्द कर के ही हो सकेगा।",
+       note:"It enters the daybook and the monthly reports. After this it can be corrected only by taking it back out, which the register's pencil does.",
+       noteHindi:"यह रोकड़ बही और मासिक रिपोर्ट में दर्ज हो जाएगा। इसके बाद सुधार के लिए इसे बही से वापस लेना होगा।",
        yes:"Submit",yesHindi:"जमा करें"},go);
 }
 /* ---------------- printing ----------------
@@ -1083,6 +1133,7 @@ function addVoucher(ev){
      has the paper in hand. Declining leaves a draft, which the register can
      print, amend or submit later. */
   function askSubmit(){
+    if(d.amendedFrom){ submitEntry(d.id); return; }   /* the correction asks in its own words */
     ask({title:"Saved as draft "+d.no+". Submit it now?",
          hindi:"ड्राफ़्ट सहेजा गया। अब जमा करें?",
          note:"Submitting puts it into the daybook and the monthly reports. Choose Not now to print, correct or submit it later from the register.",
@@ -1198,7 +1249,7 @@ function lockDay(on){
   });
   $$("#d-denoms input").forEach(function(i){ i.disabled=on; });
   ["d-save","d-clear"].forEach(function(id){
-    var b=$("#"+id); if(b){ b.disabled=on; b.title=on?"This day is closed. Delete it under Month at a glance to enter it again.":""; }
+    var b=$("#"+id); if(b){ b.disabled=on; b.title=on?"This day is closed. Correct it with the pencil under Month at a glance.":""; }
   });
 }
 function calcDay(){
@@ -1260,31 +1311,63 @@ function daySummary(day){
     : "Note count \u2014 not counted");
   return out.join("\n");
 }
-/* A date is closed once and once only. Opening a day that is already in the
-   book finds it locked: correcting it means deleting that day from Month at a
-   glance and entering it again, the way a wrong voucher is deleted and
-   written afresh rather than quietly overwritten. */
+/* Correcting a day already in the book. It comes back out of the book while
+   it is corrected -- an open day is the clerk's working copy, and the closing
+   balance every later day carries forward is worked out afresh when it closes
+   again -- and closing it asks a second time. On a site the day sheet is
+   taken off the server while it is open, the way a cancelled voucher leaves
+   the books, and is written again when the day closes. */
+function editDay(k){
+  var day=S.days[k]; if(!day) return;
+  function open(){ $("#d-date").value=k; showTab("daybook"); loadDay(); renderDayTable(); }
+  if(!day.closed){ open(); say("Day "+dmy(k)+" is open."); return; }
+  var onServer=!!(Storage.deleteDay&&Storage.mode&&Storage.mode!=="local");
+  ask({title:"Take the day sheet for "+dmy(k)+" back out of the book?",
+       hindi:"इस दिन की रोकड़ बही सुधार के लिए वापस लें?",
+       note:"It becomes an open day again, to be corrected and closed afresh. "+
+            "Every later day's opening balance follows whatever it closes at."+
+            (onServer?" The day sheet is taken off the server while it is open, and written again when you close it.":""),
+       noteHindi:"यह दिन दोबारा खुल जाएगा — सुधार कर के फिर बंद करना होगा। बाद के हर दिन का प्रारंभिक शेष उसी हिसाब से चलेगा।",
+       yes:"Correct it",yesHindi:"सुधारें"},function(){
+    day.closed=false; day.reopened=true;
+    persist(); open(); renderAll();
+    say("Day "+dmy(k)+" is out of the book for correction.");
+    if(onServer){
+      Storage.deleteDay(k).catch(function(err){
+        day.closed=true; delete day.reopened; persist(); renderAll(); loadDay();
+        note("The server did not take this day back: "+((err&&err.message)||"unknown error")+
+             " It is closed again, as it was.");
+      });
+    }
+  });
+}
+/* A date is closed once at a time. Opening a day that is already in the book
+   finds it locked: correcting it means taking it back out with the pencil in
+   Month at a glance, the way a voucher already in the books is taken back out
+   rather than quietly overwritten. */
 function saveDay(){
   var d=$("#d-date").value; if(!d) return;
   if((S.days[d]||{}).closed){
     note({title:"The day "+dmy(d)+" is already closed.",
           hindi:"\u092f\u0939 \u0926\u093f\u0928 \u092a\u0939\u0932\u0947 \u0938\u0947 \u092c\u0902\u0926 \u0939\u0948\u0964",
-          note:"A day goes into the book once. To correct it, delete "+dmy(d)+
-               " under Month at a glance and enter the day again.",
+          note:"A day goes into the book once at a time. To correct it, take "+dmy(d)+
+               " back out with the pencil under Month at a glance.",
           noteHindi:"\u090f\u0915 \u0926\u093f\u0928 \u090f\u0915 \u0939\u0940 \u092c\u093e\u0930 \u0926\u0930\u094d\u091c \u0939\u094b\u0924\u093e \u0939\u0948\u0964 \u0938\u0941\u0927\u093e\u0930 \u0915\u0947 \u0932\u093f\u090f \u0909\u0938 \u0926\u093f\u0928 \u0915\u094b \u092e\u093f\u091f\u093e\u0915\u0930 \u0926\u094b\u092c\u093e\u0930\u093e \u092d\u0930\u0947\u0902\u0964"});
     return;
   }
   var day=formDay();
-  ask({title:"Close the day "+dmy(d)+"?",
+  var back=!!(S.days[d]||{}).reopened;
+  ask({title:back?"Put the corrected day "+dmy(d)+" back in the book?":"Close the day "+dmy(d)+"?",
        hindi:"\u092f\u0939 \u0926\u093f\u0928 \u092c\u0902\u0926 \u0915\u0930\u0947\u0902?",
-       note:daySummary(day)+"\n\nOnce closed the day cannot be entered again; correcting it means "+
-            "deleting it and writing it afresh.",
+       note:daySummary(day)+"\n\n"+(back
+            ? "It goes back into the book at this closing balance, and every later day's opening follows it."
+            : "Once closed the day is locked; correcting it means taking it back out with the pencil in Month at a glance."),
        noteHindi:"\u092c\u0902\u0926 \u0939\u094b\u0928\u0947 \u0915\u0947 \u092c\u093e\u0926 \u092f\u0939 \u0926\u093f\u0928 \u0926\u094b\u092c\u093e\u0930\u093e \u0926\u0930\u094d\u091c \u0928\u0939\u0940\u0902 \u0939\u094b\u0917\u093e\u0964",
        yes:"Save & close",yesHindi:"\u091c\u092e\u093e \u0915\u0930\u0947\u0902"},function(){
     day.opening=openingFor(d);
     day.closed=true;
-    S.days[d]=day;
-    persist(); renderAll(); say("Day "+dmy(d)+" closed.");
+    S.days[d]=day;                              /* formDay() carries no reopened flag: it is spent */
+    persist(); renderAll(); say(back?"Day "+dmy(d)+" corrected and back in the book.":"Day "+dmy(d)+" closed.");
     if(Storage.saveDay){
       Storage.saveDay(S.days[d]).catch(function(err){
         setBanner("info","Day not saved to the server",
@@ -1346,10 +1429,11 @@ function renderDayTable(){
     else if(counted===coll) td.appendChild(el("span","pill p-ok","tallies"));
     else { var p=el("span","pill p-bad",(counted-coll>0?"+":"")+rs(counted-coll)); td.appendChild(p); }
     tr.appendChild(td);
-    /* A day already in the book can be reprinted or thrown out from here --
-       the same two glyphs the register uses, on the day's own row. */
+    /* A day already in the book can be reprinted, corrected or thrown out from
+       here -- the same three glyphs the register uses, on the day's own row. */
     var ax=el("td","acts");
     ax.appendChild(actionBtn("print",printSavedDay,k,"Print this day sheet"));
+    ax.appendChild(actionBtn("edit",editDay,k,day.closed?"Correct this day":"Open this day in the form"));
     ax.appendChild(actionBtn("delete",delDay,k,"Delete this day"));
     tr.appendChild(ax);
     tb.appendChild(tr);
@@ -1436,14 +1520,16 @@ function renderRegister(){
     tr.appendChild(el("td",null,e.head||"\u2014"));
     tr.appendChild(el("td",null,e.by));
     tr.appendChild(el("td","r num",rs(e.amount)));
-    /* A draft can be corrected, submitted or thrown away; once submitted the
-       only way back is to delete it and write a fresh one. Print, edit and
-       delete are icons \u2014 everyone reads them. Submit stays a word: it moves
-       money into the books, and a bare glyph on that invites a misclick. */
+    /* A draft can be corrected, submitted or thrown away. A voucher already in
+       the books can be corrected too -- the same pencil, which asks first and
+       asks again when the correction goes back in. Print, edit and delete are
+       icons \u2014 everyone reads them. Submit stays a word: it moves money into
+       the books, and a bare glyph on that invites a misclick. */
     var x=el("td","acts");
-    var acts=st==="Draft" ? [["print",printEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
-                          : [["print",printEntry],["delete",delEntry]];
-    acts.forEach(function(a){ x.appendChild(actionBtn(a[0],a[1],e.id)); });
+    var acts=st==="Draft"     ? [["print",printEntry],["edit",editDraft],["submit",submitEntry],["delete",delEntry]]
+            : st==="Submitted" ? [["print",printEntry],["edit",amendEntry,"Correct this voucher"],["delete",delEntry]]
+                               : [["print",printEntry],["delete",delEntry]];
+    acts.forEach(function(a){ x.appendChild(actionBtn(a[0],a[1],e.id,a[2])); });
     tr.appendChild(x);
     tb.appendChild(tr);
   });
