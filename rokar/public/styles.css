@@ -109,7 +109,13 @@ input[type=number],.amt{font-family:var(--mono);font-variant-numeric:tabular-num
 .btn.sm{padding:5px 11px;font-size:12px}
 .btn:disabled,.btn[disabled]{opacity:.5;cursor:not-allowed;filter:none}
 .btn[disabled]:hover{filter:none;background:transparent}
-.btn.icon{display:inline-flex;align-items:center;gap:7px}
+/* A button that carries a glyph beside its label. The class is named for this
+   app and not "icon": on the Frappe site this page is drawn inside the
+   framework's own stylesheet, which has a bare .icon rule of its own --
+   20px wide, 20px tall, font-size 0. It took the button down to the size of
+   the glyph, drew the button's border around that, and left the label sitting
+   outside it. A class name nobody else owns cannot be reached that way. */
+.btn.btn-glyph{display:inline-flex;align-items:center;gap:7px}
 .btn svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
          stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
@@ -232,8 +238,10 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
    it, so the blank between the two is where the signature goes. */
 .slip .sig .nm{font-family:"IBM Plex Sans",Arial,sans-serif;font-size:12.5px;min-height:38px;
                border-bottom:1px solid var(--line-strong);padding-bottom:2px;margin-bottom:4px}
+/* Every label sits under the middle of its own rule, the signature above it.
+   The outer two used to be pushed to the edges of the sheet, which left them
+   under the ends of their rules rather than under the names. */
 .slip .sig .lb{font-weight:700;font-size:11px}
-.slip .sig:last-child .lb{text-align:right}
 
 /* ---------- sign-in card ----------
    The staff who keep this book never meet the Frappe login page: a session

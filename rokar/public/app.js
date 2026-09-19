@@ -381,7 +381,7 @@ function buildStatic(){
      action reads the same wherever it appears. */
   [["#btn-print","Print this voucher"],["#d-print","Print this day"]].forEach(function(pr){
     var b=$(pr[0]); if(!b) return;
-    b.classList.add("icon");
+    b.classList.add("btn-glyph");
     b.innerHTML=ICONS.print;
     b.appendChild(el("span",null,pr[1]));
   });
