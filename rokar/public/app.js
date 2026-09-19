@@ -370,6 +370,8 @@ function buildStatic(){
   });
   $("#r-month").addEventListener("change",renderRegister);
   $("#r-cat").addEventListener("change",renderRegister);
+  $("#r-q").addEventListener("input",renderRegister);
+  $("#r-q").addEventListener("search",renderRegister);   /* the box's own clear button */
   $("#p-month").addEventListener("change",renderReports);
   $("#d-date").addEventListener("change",loadDay);
   $("#d-openedit").addEventListener("click",askOpeningSeed);
@@ -1486,20 +1488,44 @@ function actionBtn(name,fn,id,label){
   b.addEventListener("click",function(){ fn(id); });
   return b;
 }
+/* What the clerk types into the register's search, as a list of words. Each
+   word has to be found somewhere in the voucher, so "anand chini" finds the
+   sugar Anand was paid for rather than every voucher carrying either word. */
+function searchTerms(input){
+  var v=input?String(input.value||"").toLowerCase().trim():"";
+  return v?v.split(/\s+/):[];
+}
+/* A voucher is searched by what the office remembers it by: what was bought,
+   who was paid, and how much. The amount is matched on its digits as well as
+   the way it is printed, so 1200 and 1,200 find the same voucher. */
+function matches(e,terms){
+  if(!terms.length) return true;
+  var hay=[e.payee||"",e.no||"",e.account||"",
+           itemsOf(e).map(function(i){return i.particulars||"";}).join(" "),
+           String(n(e.amount)),inr(e.amount)].join(" ").toLowerCase();
+  return terms.every(function(t){
+    return hay.indexOf(t)>=0 || hay.indexOf(t.replace(/[\u20b9,]/g,""))>=0;
+  });
+}
 function renderRegister(){
   fillMonths($("#r-month"));
-  var mk=$("#r-month").value, cat=$("#r-cat").value;
+  var mk=$("#r-month").value, cat=$("#r-cat").value, q=searchTerms($("#r-q"));
   var rows=S.entries.filter(function(e){
-                      return ym(e.date)===mk&&(!cat||e.category===cat);
+                      return ym(e.date)===mk&&(!cat||e.category===cat)&&matches(e,q);
                     })
                     .sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:(a.no<b.no?-1:1);});
   var tb=$("#r-table tbody"), tf=$("#r-table tfoot");
   tb.innerHTML=""; tf.innerHTML="";
   var nd=rows.filter(function(e){return statusOf(e)==="Draft";}).length;
   $("#r-note").textContent=rows.length+" voucher"+(rows.length===1?"":"s")+
+    (q.length?" found":"")+
     (nd?" \u00b7 "+nd+" draft"+(nd===1?"":"s")+" not yet in the books":"");
   if(!rows.length){
-    var tr=el("tr"); var td=el("td","empty","No vouchers for "+monthLabel(mk)+(cat?" under "+cat:"")+"."); td.colSpan=11; tr.appendChild(td); tb.appendChild(tr); return;
+    var tr=el("tr");
+    var td=el("td","empty",q.length
+      ? "Nothing in "+monthLabel(mk)+(cat?" under "+cat:"")+" matches \u201c"+$("#r-q").value.trim()+"\u201d."
+      : "No vouchers for "+monthLabel(mk)+(cat?" under "+cat:"")+".");
+    td.colSpan=10; tr.appendChild(td); tb.appendChild(tr); return;
   }
   var total=0;
   rows.forEach(function(e){
@@ -1510,7 +1536,7 @@ function renderRegister(){
     var st=statusOf(e), stc=el("td");
     stc.appendChild(el("span","pill "+(st==="Draft"?"p-warn":st==="Cancelled"?"p-bad":"p-ok"),st));
     tr.appendChild(stc);
-    tr.appendChild(el("td",null,dmy(e.date)));
+    tr.appendChild(el("td","nw",dmy(e.date)));
     tr.appendChild(el("td",null,e.account||"\u2014"));
     tr.appendChild(el("td",null,e.payee));
     var its=itemsOf(e);
@@ -1522,7 +1548,8 @@ function renderRegister(){
     pt.style.maxWidth="280px"; tr.appendChild(pt);
     var c=el("td"); c.appendChild(el("span","pill p-"+e.category.toLowerCase(),e.category)); tr.appendChild(c);
     tr.appendChild(el("td",null,e.head||"\u2014"));
-    tr.appendChild(el("td",null,e.by));
+    /* The accountant was the same name down every row: it is on the voucher
+       itself, which is where it is worth reading. */
     tr.appendChild(el("td","r num",rs(e.amount)));
     /* A draft can be corrected, submitted or thrown away. A voucher already in
        the books can be corrected too -- the same pencil, which asks first and
@@ -1537,7 +1564,7 @@ function renderRegister(){
     tr.appendChild(x);
     tb.appendChild(tr);
   });
-  var ftr=el("tr"); var f1=el("td",null,"Total — "+monthLabel(mk)); f1.colSpan=9;
+  var ftr=el("tr"); var f1=el("td",null,"Total — "+monthLabel(mk)); f1.colSpan=8;
   ftr.appendChild(f1); ftr.appendChild(el("td","r num",rs(total))); ftr.appendChild(el("td"));
   tf.appendChild(ftr);
 }

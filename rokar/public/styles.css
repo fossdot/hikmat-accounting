@@ -144,6 +144,12 @@ td.r,th.r{text-align:right}
 tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600;background:var(--surface-2)}
 .empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:13px}
 .vno{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+/* A date is read as one thing: 01-09-2026 broken over three lines is three
+   numbers to put back together, and it stretched every row to match. */
+.nw{white-space:nowrap}
+/* The register's search sits with the month and the unit, and gives way to
+   them when the header runs out of room. */
+.srch{width:auto;flex:1 1 150px;min-width:110px;max-width:260px;padding:5px 9px;font-size:12px}
 .lnk{background:none;border:0;padding:0;color:var(--accent-ink);cursor:pointer;font-size:12px;text-decoration:underline;text-underline-offset:2px}
 /* Icon buttons in the register's action column. The glyphs take their colour
    from the button, so both themes work without a second icon set. */
