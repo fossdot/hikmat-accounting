@@ -782,8 +782,7 @@ function printDay(){
   put(b1,"Gross Total",gross,"grandrow");
   put(b1,"Expenses",exp);
   put(b1,"Total Bank (ICICI)",dep);
-  put(b1,"IN UPI Baircode",upi);
-  put(b1,"Total Cash received",received);
+  put(b1,"Income through UPI",upi);
   put(b1,"Closing balance",closing,"grandrow");
   t1.appendChild(b1);
   left.appendChild(t1);
