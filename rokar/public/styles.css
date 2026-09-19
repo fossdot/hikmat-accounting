@@ -107,7 +107,7 @@ input[type=number],.amt{font-family:var(--mono);font-variant-numeric:tabular-num
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line-strong);font-weight:500}
 .btn.ghost:hover{background:var(--surface-2);filter:none}
 .btn.sm{padding:5px 11px;font-size:12px}
-.btn[disabled]{opacity:.45;cursor:default;filter:none}
+.btn:disabled,.btn[disabled]{opacity:.5;cursor:not-allowed;filter:none}
 .btn[disabled]:hover{filter:none;background:transparent}
 .btn.icon{display:inline-flex;align-items:center;gap:7px}
 .btn svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
@@ -234,7 +234,6 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
                border-bottom:1px solid var(--line-strong);padding-bottom:2px;margin-bottom:4px}
 .slip .sig .lb{font-weight:700;font-size:11px}
 .slip .sig:last-child .lb{text-align:right}
-.slip .sig:first-child .lb{text-align:left}
 
 /* ---------- sign-in card ----------
    The staff who keep this book never meet the Frappe login page: a session
@@ -369,7 +368,9 @@ tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600
           box-shadow:0 14px 44px rgba(0,0,0,.24);padding:20px 22px;max-width:440px;width:100%}
 .ask-card h3{font-size:15.5px;line-height:1.35;margin-bottom:2px}
 .ask .ask-hi{font-size:12.5px;color:var(--muted);line-height:1.45}
-.ask .ask-note{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+/* The daybook summary is a list of figures, one per line, so a newline in
+   the note is kept as a line break. */
+.ask .ask-note{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5;white-space:pre-line}
 .ask .ask-note[hidden],.ask .ask-hi[hidden]{display:none}
 #ask-input{margin-top:12px;width:100%}
 #ask-choices{margin-top:13px;display:grid;gap:8px}

@@ -134,10 +134,15 @@
             (d.denominations || []).forEach(function (r) {
               if (r.qty) denoms[r.denomination] = r.qty;
             });
+            /* The daybook no longer records bus fee or cash paid out: fee,
+               bank withdrawals and other receipts come in, deposits go out.
+               A day written by an older build may still carry a bus figure,
+               and that money was in the drawer, so it is read back as other
+               cash rather than dropped from the balance. */
             out.days[d.posting_date] = {
               date: d.posting_date, opening: d.opening_balance, fee: d.fee_cash,
-              bus: d.bus_cash, wdl: d.bank_withdrawal, other: d.other_cash,
-              expenses: d.cash_expenses,
+              wdl: d.bank_withdrawal,
+              other: (d.other_cash || 0) + (d.bus_cash || 0),
               deposit: d.bank_deposit, upi: d.upi_received, utr: d.bank_utr || "",
               denoms: denoms,
               closed: d.docstatus === 1
@@ -215,10 +220,12 @@
         .then(function (r) {
           var existing = r.message || {};
           var body = {
-            posting_date: d.date, fee_cash: d.fee, bus_cash: d.bus,
+            posting_date: d.date, fee_cash: d.fee,
+            /* the app no longer records either, but the doctype still has the
+               fields, so they are written down to zero rather than left as
+               whatever an earlier save put there */
+            bus_cash: 0, cash_expenses: 0,
             bank_withdrawal: d.wdl, other_cash: d.other,
-            /* typed by the clerk; vouchers never feed this */
-            cash_expenses: d.expenses,
             bank_deposit: d.deposit,
             bank_utr: d.utr || null,
             upi_received: d.upi, denominations: denominations
@@ -265,6 +272,9 @@
  *             deleteVoucher(name, submitted)  removes it, cancelling first
  *                                           when Frappe demands it
  *             saveDay(day)
+ *             deleteDay(dateISO)            removes a day sheet from the book;
+ *                                           without it the day goes only from
+ *                                           the browser copy and the app says so
  *             saveRoster({people, approvers, payees, accounts})
  *
  * Each optional call is made behind a feature check, so an adapter may

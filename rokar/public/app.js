@@ -151,7 +151,13 @@ function askText(o,then){ dialogOpen(o,then,"text"); }
 function note(o,then){ dialogOpen(o,then,"note"); }
 function askChoose(o,then){ dialogOpen(o,then,"choose"); }
 function el(t,c,x){var e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;}
-function n(v){v=Number(v); return isFinite(v)?v:0;}
+/* The book prints its figures as ₹1,200 and the clerk types them back the
+   same way, so a comma, a space or a rupee sign is stripped before the number
+   is read. Number("24,230") is NaN, which used to land in the books as 0. */
+function n(v){
+  if(typeof v==="string") v=v.replace(/[\s,\u00a0\u20b9]/g,"");
+  v=Number(v); return isFinite(v)?v:0;
+}
 function inr(v){
   v=Math.round(n(v));
   var neg=v<0; v=Math.abs(v);
@@ -229,14 +235,15 @@ function seed(){
             category:r[5],head:(r[5]==="STL"?r[6]:""),by:r[7],approved:"Approver 1",sample:true,ts:Date.now()+i};
   });
   var open=34530;
-  [[dd(day-2),5000,800,0,0,2550],[dd(day-1),2500,400,0,0,400],[dd(day),1600,0,10000,0,550]].forEach(function(r){
-    var recd=r[1]+r[2]+r[4];
+  /* date, fee cash, bank withdrawal, other cash, UPI */
+  [[dd(day-2),5000,0,0,2550],[dd(day-1),2500,0,0,400],[dd(day),1600,10000,0,550]].forEach(function(r){
+    var recd=r[1]+r[3];
     var counted=(r[0]===dd(day-2))?recd-100:recd; /* mirrors the real 01-09 ₹100 gap */
     var dn={}; var rem=counted;
     DENOMS.forEach(function(f){ var q=Math.floor(rem/f); if(q){dn[f]=q; rem-=q*f;} });
-    S.days[r[0]]={date:r[0],opening:open,expenses:0,fee:r[1],bus:r[2],wdl:r[3],other:r[4],
-                  deposit:0,upi:r[5],denoms:dn,closed:true,sample:true};
-    open=open+r[1]+r[2]+r[3]+r[4];
+    S.days[r[0]]={date:r[0],opening:open,fee:r[1],wdl:r[2],other:r[3],
+                  deposit:0,upi:r[4],denoms:dn,closed:true,sample:true};
+    open=open+r[1]+r[2]+r[3];
   });
   S.accounts=[]; S.payees=[]; S.particulars=[];
   E.forEach(function(r){
@@ -361,7 +368,8 @@ function buildStatic(){
   $("#r-cat").addEventListener("change",renderRegister);
   $("#p-month").addEventListener("change",renderReports);
   $("#d-date").addEventListener("change",loadDay);
-  ["d-fee","d-bus","d-wdl","d-oth","d-exp","d-dep","d-upi"].forEach(function(id){ $("#"+id).addEventListener("input",calcDay); });
+  $("#d-openedit").addEventListener("click",askOpeningSeed);
+  ["d-fee","d-wdl","d-oth","d-dep","d-upi"].forEach(function(id){ $("#"+id).addEventListener("input",calcDay); });
   $("#d-denoms").addEventListener("input",calcDay);
   $("#d-save").addEventListener("click",saveDay);
   $("#d-clear").addEventListener("click",function(){ $$("#d-denoms input").forEach(function(i){i.value="";}); calcDay(); });
@@ -423,6 +431,21 @@ function renderBanner(){
     s.appendChild(btn); slot.appendChild(s);
   }
 }
+/* The figure the whole book hangs from. It is asked for when the real books
+   are started, and corrected here: every opening balance is worked out from
+   it, so putting it right moves every day at once instead of asking the clerk
+   to enter them again. */
+function askOpeningSeed(){
+  askText({title:"Opening cash in hand (₹)",
+           hindi:"हाथ में नकद (₹)",
+           note:"The cash the books start from. Every day's opening balance is worked out "+
+                "from this figure, so correcting it moves them all.",
+           noteHindi:"बही इसी रकम से शुरू होती है। हर दिन का प्रारंभिक शेष इसी से निकलता है।",
+           value:String(n(S.openingSeed)),yes:"Save",yesHindi:"जमा करें"},function(v){
+    S.openingSeed=n(v);
+    persist(); renderAll();
+  });
+}
 function startReal(){
   askText({title:"Opening cash in hand today (₹)",
            hindi:"आज हाथ में नकद (₹)",
@@ -431,7 +454,7 @@ function startReal(){
            value:"0",yes:"Start real books",yesHindi:"शुरू करें",danger:true},function(open){
     S.entries=[]; S.days={}; S.sample=false; S.openingSeed=n(open);
     var d=todayISO();
-    S.days[d]={date:d,opening:S.openingSeed,fee:0,bus:0,wdl:0,other:0,expenses:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+    S.days[d]={date:d,opening:S.openingSeed,fee:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
     persist(); renderAll();
   });
 }
@@ -731,24 +754,41 @@ function setPageSize(spec){
 }
 
 /* The day sheet the foundation already uses: NGHS's own wording and order,
-   the cash account and note count down the left, what the money went on and
-   the bank transfers down the right. One A4 portrait page: the two columns
-   sit side by side just as comfortably at 190mm as they did at 277mm, and
-   printing everything on the same sheet means the clerk never has to reach
-   into the printer dialog between a voucher and a day sheet.
-   "T.B." on their sheet is the Teachers' Block, which this app calls
-   Residence. The right-hand itemisation is drawn from the same vouchers as the
-   "Expenses" line on the left, so the two always agree. */
+   the cash account and note count down the left, the bank deposit down the
+   right. One A4 portrait page: the two columns sit side by side just as
+   comfortably at 190mm as they did at 277mm, and printing everything on the
+   same sheet means the clerk never has to reach into the printer dialog
+   between a voucher and a day sheet. The day's spending is not itemised here
+   -- the vouchers themselves are the record of it. */
+/* What the daybook form holds this moment, in the shape a saved day has, so
+   the sheet can be printed before the day is closed as well as afterwards. */
+function formDay(){
+  var dn={};
+  $$("#d-denoms input").forEach(function(i){ var q=n(i.value); if(q) dn[i.dataset.face]=q; });
+  return {date:$("#d-date").value,fee:n($("#d-fee").value),
+          wdl:n($("#d-wdl").value),other:n($("#d-oth").value),
+          deposit:n($("#d-dep").value),upi:n($("#d-upi").value),
+          utr:($("#d-utr").value||"").trim(),denoms:dn};
+}
 function printDay(){
-  var dt=$("#d-date").value;
-  if(!dt){ note("Pick a date first."); return; }
-  var opening=openingFor(dt), exp=n($("#d-exp").value);
-  var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
-      oth=n($("#d-oth").value), dep=n($("#d-dep").value), upi=n($("#d-upi").value);
-  var utr=($("#d-utr").value||"").trim();
-  var gross=opening+fee+bus+wdl+oth;
-  var received=fee+bus+oth;                     /* what came over the counter */
-  var closing=gross-exp-dep;
+  if(!$("#d-date").value){ note("Pick a date first."); return; }
+  printDaySheet(formDay());
+}
+/* A day already in the book prints from what was saved, not from the form:
+   the clerk reprinting last Tuesday is looking at some other date. */
+function printSavedDay(k){
+  var day=S.days[k]; if(!day) return;
+  printDaySheet(day);
+}
+function printDaySheet(day){
+  var dt=day.date;
+  var opening=openingFor(dt);
+  var fee=n(day.fee), wdl=n(day.wdl),
+      oth=n(day.other), dep=n(day.deposit), upi=n(day.upi);
+  var utr=(day.utr||"").trim();
+  var gross=opening+fee+wdl+oth;
+  var received=fee+oth;                     /* what came over the counter */
+  var closing=gross-dep;
 
   var box=el("div","daysheet");
   box.appendChild(el("div","dtitle1",ORG.toUpperCase()));
@@ -776,12 +816,10 @@ function printDay(){
   put(b1,"Opening Balance",opening);
   put(b1,"School fee in cash",fee);
   /* The paper sheet leaves these lines blank; print them only when used. */
-  if(bus) put(b1,"Bus fee in cash",bus);
-  if(wdl) put(b1,"Cash withdrawn from bank",wdl);
+  if(wdl) put(b1,"Cash withdrawn from bank (PNB)",wdl);
   if(oth) put(b1,"Other cash receipts",oth);
   put(b1,"Gross Total",gross,"grandrow");
-  put(b1,"Expenses",exp);
-  put(b1,"Total Bank (ICICI)",dep);
+  put(b1,"Deposit in Bank (ICICI)",dep);
   put(b1,"Income through UPI",upi);
   put(b1,"Closing balance",closing,"grandrow");
   t1.appendChild(b1);
@@ -791,8 +829,8 @@ function printDay(){
   ["Currency","Qty","Amount"].forEach(function(h,i){ hr3.appendChild(el("th",i?"r":null,h)); });
   h3.appendChild(hr3); t3.appendChild(h3);
   var b3=el("tbody"), counted=0;
-  $$("#d-denoms input").forEach(function(i){
-    var f=Number(i.dataset.face), q=n(i.value);
+  DENOMS.forEach(function(f){
+    var q=n((day.denoms||{})[f]);
     counted+=f*q;
     var tr=el("tr");
     tr.appendChild(el("td",null,inr(f)));
@@ -816,24 +854,9 @@ function printDay(){
   left.appendChild(t3);
   cols.appendChild(left);
 
-  /* ---- right: the day's spending by block, then the bank transfers ---- */
+  /* ---- right: the bank transfers ---- */
   var t2=twoCol(), b2=el("tbody");
-  var BLOCKS=[["School Expenses","School"],["T.B. Expenses","Residence"],
-              ["STL Expenses","STL"],["Construction Expenses","Construction"]];
-  BLOCKS.forEach(function(pair,bi){
-    var mine=posted(S.entries).filter(function(e){
-      return e.date===dt&&e.category===pair[1];
-    });
-    /* School and T.B. are always on the sheet; the other two only when used. */
-    if(!mine.length&&bi>1) return;
-    head(b2,pair[0]);
-    mine.forEach(function(e){
-      itemsOf(e).forEach(function(it){ put(b2,it.particulars||"",n(it.amount)); });
-    });
-    if(!mine.length) put(b2,"","");
-  });
-  put(b2,"Total",exp,"grandrow");
-  head(b2,"BANK (ICICI)");
+  head(b2,"DEPOSIT IN BANK (ICICI)");
   head(b2,"UTR NO","AMOUNT");
   if(dep) put(b2,utr||"—",dep); else put(b2,"","");
   put(b2,"Total",dep,"grandrow");
@@ -1051,7 +1074,7 @@ function addVoucher(ev){
     if(it.particulars && S.particulars.indexOf(it.particulars)<0) S.particulars.unshift(it.particulars);
   });
   S.particulars=S.particulars.slice(0,400);     /* keep the suggestion list bounded */
-  if(!S.days[d.date]) S.days[d.date]={date:d.date,opening:openingFor(d.date),fee:0,bus:0,wdl:0,other:0,expenses:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+  if(!S.days[d.date]) S.days[d.date]={date:d.date,opening:openingFor(d.date),fee:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
   /* The draft stays in the form, so printing it or submitting it is the next
      click rather than a hunt through the register. */
   persist(); renderAll(); syncFormMode();
@@ -1128,40 +1151,69 @@ function delEntry(id){
 }
 
 /* ---------------- daybook ---------------- */
-/* What the clerk records as cash paid out of the box that day.
-   Vouchers deliberately do not feed this: the school spends from a fixed
-   monthly allocation, not from the fee cash the daybook accounts for, so
-   summing vouchers here would take money out of the drawer twice. The
-   foundation's own day sheet leaves this row blank for the same reason. */
-function expensesOf(date){ return n((S.days[date]||{}).expenses); }
+/* The drawer holds what came in over the counter and what was drawn from the
+   bank, and loses only what was banked. Cash paid out is not kept here: the
+   school spends from a fixed monthly allocation, not from the fee cash this
+   book accounts for, and the vouchers are the record of that spending. The
+   foundation's own day sheet leaves the line blank for the same reason. */
 function dayKeys(){ return Object.keys(S.days).sort(); }
-function closingOf(d){
-  var day=S.days[d]; if(!day) return 0;
-  return n(day.opening)+n(day.fee)+n(day.bus)+n(day.wdl)+n(day.other)-n(day.expenses)-n(day.deposit);
+/* Every opening figure is worked out afresh from the seed forward, and the
+   one saved on the day's own record is never trusted for it. Correcting a day
+   that already has days after it used to leave each of those holding the
+   opening it was saved with, so the correction stopped dead at the next day
+   and every balance past it stayed as it was. Walking the chain means a
+   correction anywhere carries through to the end of the book. */
+function chain(){
+  var c={}, open=n(S.openingSeed);
+  dayKeys().forEach(function(k){
+    var day=S.days[k];
+    c[k]={opening:open,
+          closing:open+n(day.fee)+n(day.wdl)+n(day.other)-n(day.deposit)};
+    open=c[k].closing;
+  });
+  return c;
 }
+function openingOf(d){ var c=chain()[d]; return c?c.opening:openingFor(d); }
+function closingOf(d){ var c=chain()[d]; return c?c.closing:0; }
 function openingFor(date){
-  var prior=dayKeys().filter(function(k){return k<date;});
-  if(!prior.length) return S.openingSeed;
-  return closingOf(prior[prior.length-1]);
+  var c=chain(), prior=dayKeys().filter(function(k){return k<date;});
+  if(!prior.length) return n(S.openingSeed);
+  return c[prior[prior.length-1]].closing;
 }
 function loadDay(){
   var d=$("#d-date").value; if(!d) return;
-  var day=S.days[d]||{date:d,opening:openingFor(d),fee:0,bus:0,wdl:0,other:0,expenses:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
-  $("#d-fee").value=n(day.fee); $("#d-bus").value=n(day.bus); $("#d-wdl").value=n(day.wdl);
+  var day=S.days[d]||{date:d,opening:openingFor(d),fee:0,wdl:0,other:0,deposit:0,upi:0,utr:"",denoms:{},closed:false};
+  $("#d-fee").value=n(day.fee); $("#d-wdl").value=n(day.wdl);
   $("#d-oth").value=n(day.other); $("#d-dep").value=n(day.deposit); $("#d-upi").value=n(day.upi);
-  $("#d-exp").value=n(day.expenses);
   $("#d-utr").value=day.utr||"";
   $$("#d-denoms input").forEach(function(i){ var q=(day.denoms||{})[i.dataset.face]; i.value=q?q:""; });
   $("#d-note").textContent=day.closed?"Closed":"Open";
+  lockDay(!!day.closed);
   calcDay();
+}
+/* A closed day is there to be read and reprinted, not typed over. */
+function lockDay(on){
+  ["d-fee","d-wdl","d-oth","d-dep","d-upi","d-utr"].forEach(function(id){
+    var f=$("#"+id); if(f) f.disabled=on;
+  });
+  $$("#d-denoms input").forEach(function(i){ i.disabled=on; });
+  ["d-save","d-clear"].forEach(function(id){
+    var b=$("#"+id); if(b){ b.disabled=on; b.title=on?"This day is closed. Delete it under Month at a glance to enter it again.":""; }
+  });
 }
 function calcDay(){
   var d=$("#d-date").value; if(!d) return;
-  var opening=openingFor(d), exp=n($("#d-exp").value);
-  var fee=n($("#d-fee").value), bus=n($("#d-bus").value), wdl=n($("#d-wdl").value),
+  var opening=openingFor(d);
+  var fee=n($("#d-fee").value), wdl=n($("#d-wdl").value),
       oth=n($("#d-oth").value), dep=n($("#d-dep").value);
   $("#d-open").textContent=rs(opening);
-  $("#d-close").textContent=rs(opening+fee+bus+wdl+oth-exp-dep);
+  /* The first day in the book opens on the figure the books were started
+     from, and nothing earlier can correct it -- so that is the one day the
+     line offers to change it. */
+  var first=!dayKeys().some(function(k){return k<d;});
+  $("#d-opennote").textContent=first?"the cash the books start from":"carried from previous close";
+  $("#d-openedit").hidden=!first;
+  $("#d-close").textContent=rs(opening+fee+wdl+oth-dep);
   var counted=0;
   $$("#d-denoms input").forEach(function(i){
     var f=Number(i.dataset.face), q=n(i.value), v=f*q;
@@ -1169,7 +1221,7 @@ function calcDay(){
     var cell=$('#d-denoms td[data-val="'+f+'"]'); if(cell) cell.textContent=rs(v);
   });
   $("#d-dtot").textContent=rs(counted);
-  var collected=fee+bus+oth, diff=counted-collected;
+  var collected=fee+oth, diff=counted-collected;
   var bar=$("#d-var");
   bar.className="varbar "+(diff===0?"ok":"bad");
   bar.innerHTML="";
@@ -1185,21 +1237,86 @@ function calcDay(){
   }
   renderDayTable();
 }
+/* The figures as a sentence per line, so the clerk reads back what is about to
+   go into the book before it is closed. Only the lines that carry money are
+   listed: a sheet of zeroes is harder to check than a short list. */
+function daySummary(day){
+  var opening=openingFor(day.date);
+  var received=n(day.fee)+n(day.other);
+  var gross=opening+received+n(day.wdl);
+  var counted=0;
+  Object.keys(day.denoms||{}).forEach(function(f){ counted+=Number(f)*n(day.denoms[f]); });
+  var lines=[["Opening balance",opening],["School fee in cash",n(day.fee)]];
+  if(n(day.wdl)) lines.push(["Cash withdrawn from bank (PNB)",n(day.wdl)]);
+  if(n(day.other)) lines.push(["Other cash receipts",n(day.other)]);
+  lines.push(["Gross total",gross]);
+  if(n(day.deposit)) lines.push(["Deposit in bank (ICICI)"+(day.utr?" \u00b7 "+day.utr:""),n(day.deposit)]);
+  lines.push(["Closing cash balance",gross-n(day.deposit)]);
+  if(n(day.upi)) lines.push(["UPI received (memo only)",n(day.upi)]);
+  var out=lines.map(function(l){ return l[0]+" \u2014 "+rs(l[1]); });
+  out.push(Object.keys(day.denoms||{}).length
+    ? (counted===received ? "Note count \u2014 "+rs(counted)+", tallies with the cash received"
+       : "Note count \u2014 "+rs(counted)+", "+(counted>received?"over":"short")+" by "+rs(Math.abs(counted-received)))
+    : "Note count \u2014 not counted");
+  return out.join("\n");
+}
+/* A date is closed once and once only. Opening a day that is already in the
+   book finds it locked: correcting it means deleting that day from Month at a
+   glance and entering it again, the way a wrong voucher is deleted and
+   written afresh rather than quietly overwritten. */
 function saveDay(){
   var d=$("#d-date").value; if(!d) return;
-  var dn={};
-  $$("#d-denoms input").forEach(function(i){ var q=n(i.value); if(q) dn[i.dataset.face]=q; });
-  S.days[d]={date:d,opening:openingFor(d),expenses:n($("#d-exp").value),
-             fee:n($("#d-fee").value),bus:n($("#d-bus").value),
-             wdl:n($("#d-wdl").value),other:n($("#d-oth").value),deposit:n($("#d-dep").value),
-             upi:n($("#d-upi").value),utr:$("#d-utr").value.trim(),denoms:dn,closed:true};
-  persist(); $("#d-note").textContent="Closed"; renderAll();
-  if(Storage.saveDay){
-    Storage.saveDay(S.days[d]).catch(function(err){
-      setBanner("info","Day not saved to the server",
-                ((err&&err.message)||"unknown error")+" — it is still held in this browser.");
-    });
+  if((S.days[d]||{}).closed){
+    note({title:"The day "+dmy(d)+" is already closed.",
+          hindi:"\u092f\u0939 \u0926\u093f\u0928 \u092a\u0939\u0932\u0947 \u0938\u0947 \u092c\u0902\u0926 \u0939\u0948\u0964",
+          note:"A day goes into the book once. To correct it, delete "+dmy(d)+
+               " under Month at a glance and enter the day again.",
+          noteHindi:"\u090f\u0915 \u0926\u093f\u0928 \u090f\u0915 \u0939\u0940 \u092c\u093e\u0930 \u0926\u0930\u094d\u091c \u0939\u094b\u0924\u093e \u0939\u0948\u0964 \u0938\u0941\u0927\u093e\u0930 \u0915\u0947 \u0932\u093f\u090f \u0909\u0938 \u0926\u093f\u0928 \u0915\u094b \u092e\u093f\u091f\u093e\u0915\u0930 \u0926\u094b\u092c\u093e\u0930\u093e \u092d\u0930\u0947\u0902\u0964"});
+    return;
   }
+  var day=formDay();
+  ask({title:"Close the day "+dmy(d)+"?",
+       hindi:"\u092f\u0939 \u0926\u093f\u0928 \u092c\u0902\u0926 \u0915\u0930\u0947\u0902?",
+       note:daySummary(day)+"\n\nOnce closed the day cannot be entered again; correcting it means "+
+            "deleting it and writing it afresh.",
+       noteHindi:"\u092c\u0902\u0926 \u0939\u094b\u0928\u0947 \u0915\u0947 \u092c\u093e\u0926 \u092f\u0939 \u0926\u093f\u0928 \u0926\u094b\u092c\u093e\u0930\u093e \u0926\u0930\u094d\u091c \u0928\u0939\u0940\u0902 \u0939\u094b\u0917\u093e\u0964",
+       yes:"Save & close",yesHindi:"\u091c\u092e\u093e \u0915\u0930\u0947\u0902"},function(){
+    day.opening=openingFor(d);
+    day.closed=true;
+    S.days[d]=day;
+    persist(); renderAll(); say("Day "+dmy(d)+" closed.");
+    if(Storage.saveDay){
+      Storage.saveDay(S.days[d]).catch(function(err){
+        setBanner("info","Day not saved to the server",
+                  ((err&&err.message)||"unknown error")+" \u2014 it is still held in this browser.");
+      });
+    }
+  });
+}
+/* Throwing a day out of the book. Every later day's opening is worked out
+   from the chain, so the balances close up behind it on their own. */
+function delDay(k){
+  var day=S.days[k]; if(!day) return;
+  ask({title:"Delete the day sheet for "+dmy(k)+"?",
+       hindi:"इस दिन की रोकड़ बही मिटाएँ?",
+       note:"The day's figures and note count go for good. Every later day's "+
+            "opening balance shifts by "+rs(closingOf(k)-openingOf(k))+" to close the gap.",
+       noteHindi:"इस दिन के आँकड़े और नोट गिनती हमेशा के लिए मिट जाएँगे। बाद के हर दिन का "+
+                 "प्रारंभिक शेष उसी हिसाब से बदल जाएगा।",
+       yes:"Delete",yesHindi:"मिटाएँ",danger:true},function(){
+    delete S.days[k];
+    persist(); renderAll(); say("Day sheet for "+dmy(k)+" deleted.");
+    if(Storage.deleteDay){
+      Storage.deleteDay(k).catch(function(err){
+        /* put it back rather than let the daybook disagree with the server */
+        S.days[k]=day; persist(); renderAll();
+        note("The server did not delete this day: "+((err&&err.message)||"unknown error")+
+             " It is back in the daybook.");
+      });
+    }else if(Storage.mode&&Storage.mode!=="local"){
+      note("The day was removed here, but this server keeps its own copy of it.");
+    }
+  });
 }
 function countedOf(d){
   var day=S.days[d]||{}; var t=0;
@@ -1212,16 +1329,16 @@ function renderDayTable(){
   var keys=dayKeys().filter(function(k){return ym(k)===mk;});
   $("#d-mnote").textContent=monthLabel(mk)+" · "+keys.length+" day"+(keys.length===1?"":"s")+" recorded";
   if(!keys.length){
-    var tr=el("tr"); var td=el("td","empty","No days recorded in "+monthLabel(mk)+" yet."); td.colSpan=10; tr.appendChild(td); tb.appendChild(tr); return;
+    var tr=el("tr"); var td=el("td","empty","No days recorded in "+monthLabel(mk)+" yet."); td.colSpan=9; tr.appendChild(td); tb.appendChild(tr); return;
   }
   keys.forEach(function(k){
-    var day=S.days[k], exp=expensesOf(k), counted=countedOf(k), coll=n(day.fee)+n(day.bus)+n(day.other);
+    var day=S.days[k], counted=countedOf(k), coll=n(day.fee)+n(day.other);
     var tr=el("tr");
     tr.appendChild(el("td",null,dmy(k)));
-    [day.opening,day.fee,day.bus,day.wdl,exp,day.deposit,closingOf(k),day.upi].forEach(function(v,i){
+    [openingOf(k),day.fee,day.wdl,day.deposit,closingOf(k),day.upi].forEach(function(v,i){
       var td=el("td","r num",rs(v));
-      if(i===5&&n(v)>0) td.style.color="var(--blue)";
-      if(i===6) td.style.fontWeight="600";
+      if(i===3&&n(v)>0) td.style.color="var(--blue)";
+      if(i===4) td.style.fontWeight="600";
       tr.appendChild(td);
     });
     var td=el("td");
@@ -1229,6 +1346,12 @@ function renderDayTable(){
     else if(counted===coll) td.appendChild(el("span","pill p-ok","tallies"));
     else { var p=el("span","pill p-bad",(counted-coll>0?"+":"")+rs(counted-coll)); td.appendChild(p); }
     tr.appendChild(td);
+    /* A day already in the book can be reprinted or thrown out from here --
+       the same two glyphs the register uses, on the day's own row. */
+    var ax=el("td","acts");
+    ax.appendChild(actionBtn("print",printSavedDay,k,"Print this day sheet"));
+    ax.appendChild(actionBtn("delete",delDay,k,"Delete this day"));
+    tr.appendChild(ax);
     tb.appendChild(tr);
   });
 }
@@ -1261,14 +1384,16 @@ var ICONS={
 };
 var ACTION_LABEL={print:"Print this voucher",edit:"Edit this draft",
                   "delete":"Delete this voucher"};
-function actionBtn(name,fn,id){
+/* `label` overrides the wording when the same glyph acts on something other
+   than a voucher -- a daybook day, say. */
+function actionBtn(name,fn,id,label){
   var glyph=name==="print"?ICONS.print:name==="edit"?ICONS.edit:name==="delete"?ICONS.del:null;
   var b=el("button",glyph?"ibtn":"lnk",glyph?null:name);
   b.type="button";
   if(glyph){
     b.innerHTML=glyph;
-    b.title=ACTION_LABEL[name];
-    b.setAttribute("aria-label",ACTION_LABEL[name]);
+    b.title=label||ACTION_LABEL[name];
+    b.setAttribute("aria-label",label||ACTION_LABEL[name]);
   }
   b.addEventListener("click",function(){ fn(id); });
   return b;
@@ -1505,17 +1630,15 @@ function renderReports(){
   var dks=dayKeys().filter(function(k){return ym(k)===mk;});
   var spend=ents.reduce(function(a,e){return a+n(e.amount);},0);
   var feeCash=dks.reduce(function(a,k){return a+n(S.days[k].fee);},0);
-  var busCash=dks.reduce(function(a,k){return a+n(S.days[k].bus);},0);
   var upi=dks.reduce(function(a,k){return a+n(S.days[k].upi);},0);
   var wdl=dks.reduce(function(a,k){return a+n(S.days[k].wdl);},0);
   var dep=dks.reduce(function(a,k){return a+n(S.days[k].deposit);},0);
   var closing=dks.length?closingOf(dks[dks.length-1]):S.openingSeed;
-  var opening=dks.length?n(S.days[dks[0]].opening):S.openingSeed;
+  var opening=dks.length?openingOf(dks[0]):n(S.openingSeed);
 
   var T=$("#p-tiles"); T.innerHTML="";
   [["Total expense",rs(spend),ents.length+" vouchers","lead"],
    ["Fee collected — cash",rs(feeCash),dks.length+" days recorded",""],
-   ["Bus fee — cash",rs(busCash),"",""],
    ["UPI received",rs(upi),"memo — outside cash book",""],
    ["Withdrawn from bank",rs(wdl),"ICICI",""],
    ["Deposited to bank",rs(dep),"ICICI",""],
@@ -1589,8 +1712,8 @@ function renderReports(){
   var mh=el("thead"), mhr=el("tr"); mhr.appendChild(el("th",null,"Line")); mhr.appendChild(el("th","r","Amount"));
   mh.appendChild(mhr); MM.appendChild(mh);
   var mb=el("tbody");
-  [["Opening cash",opening],["Fee cash received",feeCash],["Bus fee cash received",busCash],
-   ["Withdrawn from bank",wdl],["Cash expenses",-dks.reduce(function(a,k){return a+expensesOf(k);},0)],
+  [["Opening cash",opening],["Fee cash received",feeCash],
+   ["Withdrawn from bank",wdl],
    ["Deposited to bank",-dep],["Closing cash",closing]].forEach(function(r,i,arr){
     var tr=el("tr");
     tr.appendChild(el("td",null,r[0]));
@@ -1604,18 +1727,17 @@ function renderReports(){
   /* collection */
   var C=$("#p-coll"); C.innerHTML="";
   var ch=el("thead"), chr=el("tr");
-  ["Date","Fee cash","Bus cash","Total collected","Counted","Variance","UPI","Bank"].forEach(function(h,i){
-    chr.appendChild(el("th",i>0&&i<7?"r":"",h));
+  ["Date","Fee cash","Total collected","Counted","Variance","UPI","Bank"].forEach(function(h,i){
+    chr.appendChild(el("th",i>0&&i<6?"r":"",h));
   });
   ch.appendChild(chr); C.appendChild(ch);
   var cb=el("tbody");
-  if(!dks.length){ var e2=el("tr"); var t2=el("td","empty","No daybook entries for "+monthLabel(mk)+"."); t2.colSpan=8; e2.appendChild(t2); cb.appendChild(e2); }
+  if(!dks.length){ var e2=el("tr"); var t2=el("td","empty","No daybook entries for "+monthLabel(mk)+"."); t2.colSpan=7; e2.appendChild(t2); cb.appendChild(e2); }
   dks.forEach(function(k){
-    var day=S.days[k], coll=n(day.fee)+n(day.bus)+n(day.other), counted=countedOf(k), diff=counted-coll;
+    var day=S.days[k], coll=n(day.fee)+n(day.other), counted=countedOf(k), diff=counted-coll;
     var tr=el("tr");
     tr.appendChild(el("td",null,dmy(k)));
     tr.appendChild(el("td","r num",rs(day.fee)));
-    tr.appendChild(el("td","r num",rs(day.bus)));
     var ct=el("td","r num",rs(coll)); ct.style.fontWeight="600"; tr.appendChild(ct);
     tr.appendChild(el("td","r num",Object.keys(day.denoms||{}).length?rs(counted):"—"));
     var vt=el("td","r");
@@ -1690,10 +1812,10 @@ function exportTally(){
 }
 function exportDaybook(){
   var mk=ym($("#d-date").value);
-  var rows=[["Date","Opening","Fee Cash","Bus Cash","Other Cash","Bank Withdrawal","Cash Expenses","Bank Deposit","Closing","UPI (memo)","Counted","Variance"]];
+  var rows=[["Date","Opening","Fee Cash","Other Cash","Bank Withdrawal","Bank Deposit","Closing","UPI (memo)","Counted","Variance"]];
   dayKeys().filter(function(k){return ym(k)===mk;}).forEach(function(k){
-    var d=S.days[k], coll=n(d.fee)+n(d.bus)+n(d.other), counted=countedOf(k);
-    rows.push([dmy(k),d.opening,d.fee,d.bus,d.other,d.wdl,expensesOf(k),d.deposit,closingOf(k),d.upi,
+    var d=S.days[k], coll=n(d.fee)+n(d.other), counted=countedOf(k);
+    rows.push([dmy(k),openingOf(k),d.fee,d.other,d.wdl,d.deposit,closingOf(k),d.upi,
                Object.keys(d.denoms||{}).length?counted:"",Object.keys(d.denoms||{}).length?counted-coll:""]);
   });
   offer("daybook_"+mmyy(mk)+".csv",csv(rows));
