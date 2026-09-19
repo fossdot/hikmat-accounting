@@ -230,11 +230,45 @@
             bank_utr: d.utr || null,
             upi_received: d.upi, denominations: denominations
           };
-          if (existing.name) {
-            return api("/api/resource/Daybook Day/" + encodeURIComponent(existing.name),
-                       { method: "PUT", body: body });
-          }
-          return api("/api/resource/Daybook Day", { method: "POST", body: body });
+          var write = existing.name
+            ? api("/api/resource/Daybook Day/" + encodeURIComponent(existing.name),
+                  { method: "PUT", body: body })
+            : api("/api/resource/Daybook Day", { method: "POST", body: body });
+          if (!d.closed) return write;
+          /* Closing the day is a submit, and it has to reach the server or it
+             does not hold: the day comes back from load() as closed only when
+             its docstatus is 1. Written figures alone left the document a
+             draft, so a day the clerk had closed opened again on the next
+             refresh, ready to be typed over. Same shape as submitVoucher --
+             the fields go first, the docstatus on its own. */
+          return write.then(function (res) {
+            var name = (res && res.data && res.data.name) || existing.name;
+            return api("/api/resource/Daybook Day/" + encodeURIComponent(name),
+                       { method: "PUT", body: { docstatus: 1 } });
+          });
+        });
+    },
+
+    /** Throwing a day out of the book, which is how a closed day is corrected:
+     *  the day is deleted and written again. A closed day is submitted, and
+     *  Frappe will not delete a submitted document, so it is cancelled first
+     *  and then deleted -- the two calls deleteVoucher makes, for the same
+     *  reason. A cancel that cannot be made again must not stop the delete. */
+    deleteDay: function (date) {
+      return api("/api/resource/Daybook Day?limit_page_length=1&filters=" +
+                 encodeURIComponent(JSON.stringify([["posting_date", "=", date]])) +
+                 "&fields=" + encodeURIComponent(JSON.stringify(["name", "docstatus"])))
+        .then(function (r) {
+          var row = (r.data || [])[0];
+          /* Never written to the server: the browser copy was the whole of it. */
+          if (!row) return;
+          var path = "/api/resource/Daybook Day/" + encodeURIComponent(row.name);
+          var drop = function () { return api(path, { method: "DELETE" }); };
+          if (row.docstatus !== 1) return drop();
+          return api("/api/method/frappe.client.cancel", {
+            method: "POST",
+            body: { doctype: "Daybook Day", name: row.name }
+          }).then(drop, drop);
         });
     },
 
