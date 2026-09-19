@@ -58,7 +58,9 @@
   {
    "fieldname": "bus_cash",
    "fieldtype": "Currency",
-   "label": "Bus fee - cash"
+   "label": "Bus fee - cash",
+   "read_only": 1,
+   "description": "Not part of the balance: the school takes no bus fee. Kept for the days that recorded one, and read back as other cash."
   },
   {
    "fieldname": "cb0",
@@ -84,7 +86,8 @@
    "fieldname": "cash_expenses",
    "fieldtype": "Currency",
    "label": "Cash expenses (from vouchers)",
-   "description": "Cash paid out of the box today. Vouchers are not summed here: the school spends from its monthly allocation, not from the fee cash this daybook accounts for."
+   "description": "Not part of the balance: the vouchers are the record of what was spent. Kept for the days that recorded a figure here.",
+   "read_only": 1
   },
   {
    "fieldname": "bank_deposit",

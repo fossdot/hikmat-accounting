@@ -22,13 +22,18 @@ class DaybookDay(Document):
 	def recalculate(self, save=False):
 		self.opening_balance = self.get_opening_balance()
 
+		# What came into the drawer, less what went to the bank. The school takes
+		# no bus fee, and what it spends is on the vouchers rather than typed in
+		# here a second time, so neither figure is in the balance any more. The
+		# two fields stay on the doctype and hold what older days recorded: a
+		# day written then keeps the closing balance it was saved with until it
+		# is saved again, and a bus figure is read back as other cash so that
+		# money is not dropped from the balance when it is.
 		self.closing_balance = (
 			flt(self.opening_balance)
 			+ flt(self.fee_cash)
-			+ flt(self.bus_cash)
 			+ flt(self.bank_withdrawal)
 			+ flt(self.other_cash)
-			- flt(self.cash_expenses)
 			- flt(self.bank_deposit)
 		)
 
@@ -39,7 +44,7 @@ class DaybookDay(Document):
 		self.counted_total = counted
 
 		# The count covers what came over the counter today, not the whole drawer.
-		self.collected_total = flt(self.fee_cash) + flt(self.bus_cash) + flt(self.other_cash)
+		self.collected_total = flt(self.fee_cash) + flt(self.other_cash)
 		self.variance = counted - self.collected_total
 
 		if save:
