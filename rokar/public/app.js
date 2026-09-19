@@ -44,7 +44,11 @@ function fyOf(iso){ var a=fyStart(iso); return yy(a)+"-"+yy(a+1); }
 function fyLabel(iso){ var a=fyStart(iso); return a+"\u2011"+yy(a+1); }
 
 /* ---------------- state ---------------- */
-var S={entries:[],days:{},mode:"local",sample:true,openingSeed:0,
+/* sample is what the books hold, not what the app assumes before it has seen
+   them: seed() raises it when it lays the examples down, and a loaded book
+   brings its own. Starting it true painted the sample banner over the site
+   for the moment between the first render and the books arriving. */
+var S={entries:[],days:{},mode:"local",sample:false,openingSeed:0,
        people:DEFAULT_PEOPLE.slice(),approvers:DEFAULT_APPROVERS.slice(),
        payees:DEFAULT_PAYEES.slice(),accounts:[],particulars:[],given:{},series:{}};
 
